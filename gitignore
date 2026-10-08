@@ -1,0 +1,4 @@
+# Raw VPD download is large; keep it out of git and document how to get it
+data/raw/
+__pycache__/
+.DS_Store

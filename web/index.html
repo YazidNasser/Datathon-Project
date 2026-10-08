@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Vancouver crime heat map</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.css">
+
+  <style>
+    :root {
+      --ink: #17303c;        /* harbour blue-black for text */
+      --muted: #566a74;      /* secondary text */
+      --line: #d2dbdf;       /* borders and dividers */
+      --paper: #f3f6f7;      /* sidebar background */
+      --surface: #ffffff;
+      --sea: #0d6c8a;        /* accent: selected controls, the area circle */
+      --sea-soft: #e3f0f4;
+      --font: "Atkinson Hyperlegible", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      color-scheme: light;
+    }
+
+    * { box-sizing: border-box; }
+    html, body { height: 100%; margin: 0; }
+    body { font: 16px/1.5 var(--font); color: var(--ink); background: var(--paper); }
+
+    .app { display: grid; grid-template-columns: 370px 1fr; height: 100%; }
+
+    /* Sidebar */
+    .panel { overflow-y: auto; padding: 28px 26px 22px; display: flex; flex-direction: column; gap: 26px; border-right: 1px solid var(--line); }
+    h1 { font-size: 1.6rem; line-height: 1.15; margin: 0 0 8px; letter-spacing: -0.01em; }
+    .lede { margin: 0; color: var(--muted); max-width: 34ch; }
+
+    .controls { display: flex; flex-direction: column; gap: 18px; }
+    label, legend { display: block; font-weight: 700; font-size: 0.95rem; margin-bottom: 6px; padding: 0; }
+    fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
+    select {
+      width: 100%; font: inherit; color: var(--ink); background: var(--surface);
+      border: 1px solid var(--line); border-radius: 6px; padding: 9px 10px;
+    }
+    .seg { display: grid; grid-template-columns: repeat(4, 1fr); border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: var(--surface); }
+    .seg button {
+      font: inherit; font-size: 0.88rem; color: var(--ink); background: transparent; white-space: nowrap;
+      border: 0; border-left: 1px solid var(--line); padding: 9px 2px; cursor: pointer;
+    }
+    .seg button:first-child { border-left: 0; }
+    .seg button[aria-pressed="true"] { background: var(--sea); color: #fff; font-weight: 700; }
+    .hint { margin: 6px 0 0; font-size: 0.85rem; color: var(--muted); }
+    .citywide { margin: 0; font-size: 0.92rem; color: var(--muted); }
+    .citywide strong { color: var(--ink); }
+
+    :focus-visible { outline: 3px solid var(--sea); outline-offset: 2px; }
+
+    /* Area summary: the one bold element on the page */
+    .summary { border-top: 1px solid var(--line); padding-top: 22px; }
+    .summary .empty { margin: 0; color: var(--muted); }
+    .count { font-size: 3.4rem; font-weight: 700; line-height: 1; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; margin: 0; }
+    .count-label { margin: 6px 0 4px; font-size: 1.05rem; }
+    .showing { margin: 0 0 14px; font-size: 0.9rem; color: var(--muted); }
+    .change { margin: 0 0 20px; }
+    .change.up { color: #9b2c1f; }
+    .change.down { color: #1f6b3a; }
+    h2 { font-size: 1rem; margin: 0 0 10px; }
+    .bars { display: grid; grid-template-columns: 70px 1fr 48px; gap: 6px 10px; align-items: center; margin-bottom: 20px; font-size: 0.92rem; }
+    .bar { height: 12px; background: var(--sea-soft); border-radius: 3px; overflow: hidden; }
+    .bar span { display: block; height: 100%; background: var(--sea); }
+    .bars .n { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+    .top { margin: 0 0 16px; padding-left: 1.3em; }
+    .top li { margin-bottom: 4px; }
+    .top .n { color: var(--muted); font-variant-numeric: tabular-nums; }
+    .note { font-size: 0.85rem; color: var(--muted); background: var(--surface); border-left: 3px solid var(--line); padding: 8px 10px; margin: 0; }
+
+    .about { margin-top: auto; font-size: 0.8rem; color: var(--muted); line-height: 1.45; }
+    .about p { margin: 0 0 6px; }
+    a { color: var(--sea); }
+
+    /* Map */
+    .map-wrap { position: relative; min-height: 0; }
+    #map { position: absolute; inset: 0; background: #e8ecee; cursor: crosshair; }
+    #map .leaflet-tile-pane { filter: grayscale(1) brightness(1.04) contrast(0.92); }
+    .legend {
+      position: absolute; left: 14px; bottom: 26px; z-index: 1000;
+      background: rgba(255,255,255,0.94); border: 1px solid var(--line); border-radius: 6px;
+      padding: 8px 12px; font-size: 0.82rem; white-space: nowrap;
+    }
+    .legend .ramp { height: 10px; border-radius: 3px; margin: 4px 0 2px;
+      background: linear-gradient(90deg, #fde68a, #f59e0b, #e4572e, #8e1b1b); }
+    .legend .ends { display: flex; justify-content: space-between; color: var(--muted); }
+    .status {
+      position: absolute; inset: 0; z-index: 1100; display: none; place-items: center;
+      background: rgba(243,246,247,0.9); padding: 24px; text-align: center;
+    }
+    .status.show { display: grid; }
+    .status div { max-width: 46ch; }
+    .status code { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
+
+    /* Phones: map on top, panel below */
+    @media (max-width: 760px) {
+      .app { grid-template-columns: 1fr; grid-template-rows: 55vh auto; height: auto; }
+      .map-wrap { order: -1; height: 55vh; }
+      .panel { border-right: 0; border-top: 1px solid var(--line); overflow: visible; }
+      .count { font-size: 2.8rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="panel">
+      <header>
+        <h1>Vancouver crime heat map</h1>
+        <p class="lede">See where and when crime is reported in Vancouver. Choose what to show, then click the map to summarize the area around that spot.</p>
+      </header>
+
+      <section class="controls" aria-label="Filters">
+        <div>
+          <label for="type">Type of crime</label>
+          <select id="type"></select>
+        </div>
+
+        <fieldset>
+          <legend>Time of day</legend>
+          <div class="seg" id="time">
+            <button type="button" data-time="any" aria-pressed="true">Any time</button>
+            <button type="button" data-time="day" aria-pressed="false">Day</button>
+            <button type="button" data-time="evening" aria-pressed="false">Evening</button>
+            <button type="button" data-time="night" aria-pressed="false">Night</button>
+          </div>
+          <p class="hint">Day 6 am to 6 pm, evening 6 to 10 pm, night 10 pm to 6 am</p>
+        </fieldset>
+
+        <div>
+          <label for="hood">Jump to a neighbourhood</label>
+          <select id="hood"><option value="">Choose a neighbourhood</option></select>
+        </div>
+
+        <p class="citywide" id="citywide"></p>
+      </section>
+
+      <section class="summary" id="summary" aria-live="polite">
+        <p class="empty">Click anywhere on the map to see what's been reported within 500 m of that spot.</p>
+      </section>
+
+      <footer class="about" id="about"></footer>
+    </aside>
+
+    <main class="map-wrap">
+      <div id="map" role="application" aria-label="Map of Vancouver. Click to summarize an area."></div>
+      <div class="legend" aria-hidden="true">
+        <span id="legend-title">Reported incidents</span>
+        <div class="ramp"></div>
+        <div class="ends"><span>Fewer</span><span>More</span></div>
+      </div>
+      <div class="status show" id="status"><div>Loading crime data…</div></div>
+    </main>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+  <script>
+    // ---------------------------------------------------------------------
+    // Settings: change these to fit your demo situation
+    // ---------------------------------------------------------------------
+    const CONFIG = {
+      dataUrl: "data.json",
+      center: [49.255, -123.12],
+      zoom: 12,
+      minZoom: 11,
+      maxZoom: 16,          // capped on purpose: VPD offsets locations, so street-level detail would mislead
+      radiusMeters: 500,    // size of the area summarized when you click
+      defaultType: "all",   // or a label such as "Bike theft" to open on your demo situation
+      defaultTime: "any",   // "any", "day", "evening" or "night"
+      heatStrength: 1,      // raise if the heat looks faint, lower if everything looks red
+      minForChange: 10,     // don't show a % change when the previous year had fewer incidents than this
+    };
+
+    const TIME_LABELS = { any: "any time", day: "day", evening: "evening", night: "night" };
+    const IN_BUCKET = {
+      day: (h) => h >= 6 && h < 18,
+      evening: (h) => h >= 18 && h < 22,
+      night: (h) => h >= 22 || (h >= 0 && h < 6),
+    };
+
+    // Point layout from prepare_data.py: [lat, lng, typeIndex, hour (-1 = unknown), period (0 = last 12 months, 1 = previous)]
+    const LAT = 0, LNG = 1, TYPE = 2, HOUR = 3, PERIOD = 4;
+
+    const state = { data: null, type: "all", time: CONFIG.defaultTime, selected: null };
+    const $ = (id) => document.getElementById(id);
+    const fmt = (n) => n.toLocaleString("en-CA");
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    // ---------------------------------------------------------------------
+    // Step 1: the base map of Vancouver
+    // ---------------------------------------------------------------------
+    const map = L.map("map", { minZoom: CONFIG.minZoom, maxZoom: CONFIG.maxZoom })
+      .setView(CONFIG.center, CONFIG.zoom);
+    map.setMaxBounds([[49.15, -123.35], [49.36, -122.95]]);
+
+    // OpenStreetMap tiles, greyed out with CSS (see .leaflet-tile-pane) so the heat colours stand out
+    L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+      maxZoom: 19,
+    }).addTo(map);
+
+    // ---------------------------------------------------------------------
+    // Step 2: the heat layer (filled once the data loads)
+    // ---------------------------------------------------------------------
+    const heat = L.heatLayer([], {
+      radius: 14,
+      blur: 18,
+      maxZoom: 14,
+      minOpacity: 0.25,
+      gradient: { 0.25: "#fde68a", 0.5: "#f59e0b", 0.75: "#e4572e", 1: "#8e1b1b" },
+    }).addTo(map);
+
+    const areaCircle = L.circle(CONFIG.center, {
+      radius: CONFIG.radiusMeters, color: "#0d6c8a", weight: 2, fillOpacity: 0.06, interactive: false,
+    });
+
+    // ---------------------------------------------------------------------
+    // Filtering
+    // ---------------------------------------------------------------------
+    function matches(p, period, { ignoreType = false, ignoreTime = false } = {}) {
+      if (p[PERIOD] !== period) return false;
+      if (!ignoreType && state.type !== "all" && p[TYPE] !== state.type) return false;
+      if (!ignoreTime && state.time !== "any") {
+        if (p[HOUR] < 0 || !IN_BUCKET[state.time](p[HOUR])) return false;
+      }
+      return true;
+    }
+
+    // Wording comes from data.json, so the page works for "last 12 months" or a single year like 2026
+    const periodLabel = () => state.data.periodLabel || "in the last 12 months";
+    const hasComparison = () => state.data.compare !== false;
+
+    function typeLabel() {
+      return state.type === "all" ? "All types" : state.data.types[state.type].label;
+    }
+
+    function updateHeat() {
+      const pts = state.data.points.filter((p) => matches(p, 0));
+      // Scale each point's weight by how many points are showing, so a rare type
+      // (e.g. bike theft) is as readable as all types combined.
+      const weight = Math.min(1, Math.max(0.002, (CONFIG.heatStrength * 350) / Math.max(pts.length, 1)));
+      heat.setLatLngs(pts.map((p) => [p[LAT], p[LNG], weight]));
+      $("citywide").innerHTML =
+        `City-wide for these filters: <strong>${fmt(pts.length)}</strong> reported incidents ${periodLabel()}`;
+    }
+
+    // ---------------------------------------------------------------------
+    // Step 3: the area summary when someone clicks the map
+    // ---------------------------------------------------------------------
+    function nearFn(center) {
+      const cosLat = Math.cos((center.lat * Math.PI) / 180);
+      const r2 = CONFIG.radiusMeters ** 2;
+      return (p) => {
+        const dy = (p[LAT] - center.lat) * 111320;
+        const dx = (p[LNG] - center.lng) * 111320 * cosLat;
+        return dx * dx + dy * dy <= r2;
+      };
+    }
+
+    function selectPoint(latlng) {
+      state.selected = latlng;
+      areaCircle.setLatLng(latlng);
+      if (!map.hasLayer(areaCircle)) areaCircle.addTo(map);
+      renderSummary();
+    }
+
+    function renderSummary() {
+      if (!state.selected) return;
+      const near = nearFn(state.selected);
+      const local = state.data.points.filter(near);
+
+      const now = local.filter((p) => matches(p, 0)).length;
+      const before = local.filter((p) => matches(p, 1)).length;
+
+      // Change from the previous 12 months
+      let changeHtml;
+      if (!hasComparison()) {
+        changeHtml = "";
+      } else if (before < CONFIG.minForChange) {
+        changeHtml = `<p class="change">Too few incidents in the previous 12 months to compare.</p>`;
+      } else {
+        const pct = Math.round(((now - before) / before) * 100);
+        if (Math.abs(pct) < 5) changeHtml = `<p class="change">About the same as the previous 12 months (${fmt(before)}).</p>`;
+        else if (pct > 0) changeHtml = `<p class="change up">Up ${pct}% from the previous 12 months (${fmt(before)}).</p>`;
+        else changeHtml = `<p class="change down">Down ${Math.abs(pct)}% from the previous 12 months (${fmt(before)}).</p>`;
+      }
+
+      // When these happen: uses the chosen crime type, all times of day
+      const buckets = { day: 0, evening: 0, night: 0 };
+      let unknownHour = 0;
+      for (const p of local) {
+        if (!matches(p, 0, { ignoreTime: true })) continue;
+        if (p[HOUR] < 0) { unknownHour++; continue; }
+        for (const b in IN_BUCKET) if (IN_BUCKET[b](p[HOUR])) buckets[b]++;
+      }
+      const maxBucket = Math.max(1, ...Object.values(buckets));
+      const barsHtml = Object.entries(buckets).map(([b, n]) => `
+        <span>${b[0].toUpperCase() + b.slice(1)}</span>
+        <div class="bar"><span style="width:${(n / maxBucket) * 100}%"></span></div>
+        <span class="n">${fmt(n)}</span>`).join("");
+
+      // Most common types here (only when showing all types)
+      let topHtml = "";
+      if (state.type === "all") {
+        const counts = new Map();
+        for (const p of local) if (matches(p, 0)) counts.set(p[TYPE], (counts.get(p[TYPE]) || 0) + 1);
+        const top = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 3);
+        if (top.length) {
+          topHtml = `<h2>Most common here</h2><ol class="top">${top.map(([t, n]) =>
+            `<li>${state.data.types[t].label} <span class="n">${fmt(n)}</span></li>`).join("")}</ol>`;
+        }
+      }
+
+      const blurred = state.type === "all"
+        ? state.data.types.some((t) => t.blurred)
+        : state.data.types[state.type].blurred;
+      const noteHtml = blurred
+        ? `<p class="note">VPD spreads the locations of offences against a person across several blocks, so read those as area-level only.</p>`
+        : "";
+
+      $("summary").innerHTML = `
+        <p class="count">${fmt(now)}</p>
+        <p class="count-label">reported incidents within ${CONFIG.radiusMeters} m ${periodLabel()}</p>
+        <p class="showing">Showing ${typeLabel().toLowerCase()}, ${TIME_LABELS[state.time]}</p>
+        ${changeHtml}
+        <h2>When these happen</h2>
+        <div class="bars">${barsHtml}</div>
+        ${unknownHour ? `<p class="hint" style="margin:-12px 0 16px">${fmt(unknownHour)} with no time recorded</p>` : ""}
+        ${topHtml}
+        ${noteHtml}`;
+    }
+
+    // ---------------------------------------------------------------------
+    // Controls
+    // ---------------------------------------------------------------------
+    function buildControls() {
+      const { types, neighbourhoods, points } = state.data;
+
+      // Crime types, most common first
+      const totals = new Array(types.length).fill(0);
+      for (const p of points) if (p[PERIOD] === 0) totals[p[TYPE]]++;
+      const order = types.map((_, i) => i).sort((a, b) => totals[b] - totals[a]);
+      $("type").innerHTML = `<option value="all">All types</option>` +
+        order.map((i) => `<option value="${i}">${types[i].label}</option>`).join("");
+
+      const preset = types.findIndex((t) => t.label === CONFIG.defaultType);
+      if (preset >= 0) { state.type = preset; $("type").value = String(preset); }
+
+      $("type").addEventListener("change", (e) => {
+        state.type = e.target.value === "all" ? "all" : Number(e.target.value);
+        refresh();
+      });
+
+      $("time").addEventListener("click", (e) => {
+        const btn = e.target.closest("button[data-time]");
+        if (!btn) return;
+        state.time = btn.dataset.time;
+        refresh();
+      });
+
+      $("hood").innerHTML += neighbourhoods.map((h, i) => `<option value="${i}">${h.name}</option>`).join("");
+      $("hood").addEventListener("change", (e) => {
+        if (e.target.value === "") return;
+        const h = neighbourhoods[Number(e.target.value)];
+        const ll = L.latLng(h.lat, h.lng);
+        if (reduceMotion) map.setView(ll, 14); else map.flyTo(ll, 14, { duration: 0.8 });
+        selectPoint(ll);
+      });
+
+      map.on("click", (e) => selectPoint(e.latlng));
+    }
+
+    function syncTimeButtons() {
+      for (const btn of document.querySelectorAll("#time button")) {
+        btn.setAttribute("aria-pressed", String(btn.dataset.time === state.time));
+      }
+    }
+
+    function refresh() {
+      syncTimeButtons();
+      updateHeat();
+      renderSummary();
+    }
+
+    function renderAbout() {
+      const d = state.data;
+      const through = new Date(d.latestDate + "T12:00:00").toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric" });
+      $("about").innerHTML = `
+        <p>Source: Vancouver Police Department, <a href="https://geodash.vpd.ca/opendata/">GeoDASH open data</a>. Data through ${through}.</p>
+        <p>Shows reported incidents that police confirmed occurred, not all crime. Busy areas show more because more people are there.</p>
+        <p>VPD offsets locations for privacy: property crimes to the hundred block, offences against a person across several blocks. ${fmt(d.noLocation ?? d.noLocationLast12 ?? 0)} incidents ${periodLabel()} have no location and aren't shown.</p>`;
+      $("legend-title").textContent = `Reported incidents ${periodLabel()}`;
+    }
+
+    function showError(message) {
+      $("status").innerHTML = `<div>${message}</div>`;
+      $("status").classList.add("show");
+    }
+
+    // ---------------------------------------------------------------------
+    // Load the data and start
+    // ---------------------------------------------------------------------
+    async function start() {
+      if (location.protocol === "file:") {
+        showError(`This page needs a local web server to load its data. In a terminal, go to the <code>web</code> folder and run <code>python -m http.server 8000</code>, then open <code>http://localhost:8000</code>.`);
+        return;
+      }
+      try {
+        const res = await fetch(CONFIG.dataUrl);
+        if (!res.ok) throw new Error(res.status);
+        state.data = await res.json();
+      } catch (err) {
+        showError(`Couldn't load <code>${CONFIG.dataUrl}</code>. Run <code>python scripts/prepare_data.py</code> from the project folder to create it, then reload this page.`);
+        return;
+      }
+      $("status").classList.remove("show");
+      buildControls();
+      renderAbout();
+      refresh();
+    }
+
+    start();
+  </script>
+</body>
+</html>
