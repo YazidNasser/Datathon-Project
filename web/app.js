@@ -1005,7 +1005,10 @@ function compareRows(A, B) {
 // The rows with A and B side by side, each with its share of that area's reports so a quiet and a busy area can still be compared
 function compareTable(A, B, rows) {
   if (!A && !B) return "";
-  const cell = (s, n) => (s ? `<span class="n">${fmt(n)} <small>${s.now ? Math.round((n / s.now) * 100) : 0}%</small></span>` : `<span class="n">–</span>`);
+  // Each share is out of what its rows add up to: the area's count for crime types, but for parts of the day every
+  // hour (the rows ignore the picked hours), or a picked evening would make morning's share over 100% or 0%
+  const total = (s) => (state.type === "all" ? s.now : sum(Object.values(s.buckets)));
+  const cell = (s, n) => (s ? `<span class="n">${fmt(n)} <small>${total(s) ? Math.round((n / total(s)) * 100) : 0}%</small></span>` : `<span class="n">–</span>`);
   return `<div class="h2h"><h3 class="sec">${state.type === "all" ? "Most common" : "By time of day"}</h3><b>A</b><b>B</b>
     ${rows.map(([t, a, b]) => `<span>${t}</span>${cell(A, a)}${cell(B, b)}`).join("")}</div>`;
 }
