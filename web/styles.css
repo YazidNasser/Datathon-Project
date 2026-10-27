@@ -16,9 +16,9 @@
   --up: #a8341d;   --up-soft: #fbeae5;     /* "up from last year" */
   --down: #23744a; --down-soft: #e3f3ea;   /* "down from last year" */
   --bar-bg: #e9eef0;
-  --heat-1: #fde68a; --heat-2: #f59e0b; --heat-3: #e4572e;
-  /* Heat map colours, fewest to most: on a light map "more" gets darker, on a dark map it gets brighter */
-  --ramp-1: #fde68a; --ramp-2: #fbbf24; --ramp-3: #f97316; --ramp-4: #dc2626; --ramp-5: #7f1d1d;
+  /* Heat map colours, fewest to most: on a light map "more" gets darker, on a dark map it gets brighter.
+     Pale amber to deep plum (the dark theme's magma ramp run the other way), so busy reads as dense, not as danger red */
+  --ramp-1: #fde3a7; --ramp-2: #f7ad6a; --ramp-3: #d9607e; --ramp-4: #92307f; --ramp-5: #45125e;
   --heat-blend: multiply;  /* lets street names show through the heat */
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --map-bg: #e8ecee;
@@ -105,6 +105,9 @@ a { color: var(--sea); }
   .app:is([data-view="trends"], [data-view="compare"]) #map .leaflet-bottom.leaflet-right { right: 356px; }   /* the slimmer 340px panels */
   .app[data-view="map"]:has(.area:not(:empty)) #map .leaflet-bottom.leaflet-right { right: 316px; }   /* the slimmer 300px area card */
 }
+/* A thin white halo round the area circles on the light map, so B's purple still reads over the plum end of the heat
+   (the dark map's heat is bright where it's busy, so its circles don't need one) */
+:root:not([data-theme="dark"]) #map .leaflet-overlay-pane path { filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff); }
 /* Area A's and B's colour, for the map handles and the "Place A | B" toggle */
 .ab-a, .slot-pick .ab.a { --slot: var(--sea); }
 .ab-b, .slot-pick .ab.b { --slot: var(--b); }
@@ -206,7 +209,7 @@ details.about p { margin-top: 8px; }
 .bars { display: grid; grid-template-columns: minmax(0, 120px) 1fr 52px; gap: 7px 10px; align-items: center; font-size: 0.84rem; }
 .bars .n { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
 .bar { height: 8px; border-radius: 4px; background: var(--bar-bg); overflow: hidden; }
-.bar span { display: block; height: 100%; border-radius: 4px; background: var(--heat-3); }
+.bar span { display: block; height: 100%; border-radius: 4px; background: var(--muted); }   /* neutral: the heat colours mean the map */
 .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
 .tiles div { background: var(--surface-2); border-radius: 10px; padding: 8px 2px; text-align: center; min-width: 0; }
 .tiles div.top { background: var(--sea-soft); color: var(--sea); }

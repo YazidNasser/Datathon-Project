@@ -14,7 +14,7 @@ const CONFIG = {
   defaultTime: "any",   // "any", "morning", "afternoon", "evening" or "overnight" (more can be picked in the app)
   heatStrength: 1,      // higher = more of the city lights up; lower = only the strongest hotspots show
   heatFloor: 0.05,      // faintest a reported spot can be: 0 = quiet areas fully see-through
-  hotspotLevel: 0.95,   // how busy a spot must be to show as dark red: 0.95 = the busiest 5% of the map
+  hotspotLevel: 0.99,   // how busy a spot must be to show in the top colour: 0.99 = the busiest 1% of the map
   minForChange: 10,     // don't show a % change when the previous year had fewer incidents than this
 };
 
@@ -254,7 +254,8 @@ Object.assign(L.HeatLayer.prototype, {
       if (s) { s[0] = (s[0] * s[2] + x * k) / (s[2] + k); s[1] = (s[1] * s[2] + y * k) / (s[2] + k); s[2] += k; }
       else cells.set(key, [x, y, k]);
     }
-    const data = [...cells.values()].map(([x, y, k]) => [Math.round(x), Math.round(y), Math.min(k, max)]);
+    // Square root: the busiest cells are many times the rest, so on a straight scale downtown saturated into one blob
+    const data = [...cells.values()].map(([x, y, k]) => [Math.round(x), Math.round(y), Math.min(Math.sqrt(k), max)]);
     this._heat.data(data).draw(this.options.minOpacity);
   },
   _animateZoom(e) {   // the same arithmetic as Leaflet's padded renderers, with a top-left transform origin
