@@ -1,54 +1,66 @@
 # VanScene
 
-**Know your new neighbourhood.**
+**See where and when crime is reported in Vancouver, in plain language.**
 
-VanScene is a simple web app that shows patterns of reported crime in Vancouver, built on open data from the Vancouver Police Department (VPD). It helps newcomers answer two questions while they look for housing: *"How does reported crime compare across the neighbourhoods I'm considering?"* and *"What kinds of incidents have been reported here, and when?"*
+![VanScene: picking years and evening hours, opening an area near Mount Pleasant, then comparing it with Kitsilano](docs/vanscene-demo.gif)
 
-It is one input to a newcomer's research, alongside visiting neighbourhoods, talking to locals, and other sources. **It does not rate the safety of any location.**
+**[Open VanScene](https://vanscene.netlify.app)** · [Watch the 60-second demo](https://youtu.be/DbSOYitXOZY)
 
-**Team:** Crimes Against Humanity · **Datathon:** Build Trilemma Datathon 2026 · **Status:** Build Session 2 complete, preparing for Build Session 3
+VanScene turns the Vancouver Police Department's open crime data into a map you can read at a glance. It's for people choosing a neighbourhood or getting to know one: compare areas, see what kinds of incidents get reported there and at what time of day, and check whether a year was unusual.
 
-▶️ **[Watch the 60-second demo](https://youtu.be/DbSOYitXOZY)**
+**It shows reported incidents, not a safety rating.** Busy places show more because more people are there. Use it as one input next to visiting the area and talking to people who live there.
+
+**Team:** Crimes Against Humanity · **Datathon:** Build Trilemma Datathon 2026
 
 ---
 
-## What the app does
+## What you can do
 
-Built from **374,186 mapped incidents reported between January 2016 and October 2, 2026**.
+- **Read the map.** A heat map of reported incidents across the City of Vancouver, from pale amber for fewer to deep plum for more. The colour scale stays the same across years, so 2019 and 2025 can be compared directly.
+- **Filter it.** Pick any years from 2016 on, a crime type (for example "Home break-ins" or "Bike theft"), and a time of day. The day is split into four equal six-hour parts, so they compare fairly. You can also click or drag across single hours on the chart under them.
+- **Look at one spot.** Click anywhere for a summary of what was reported within 500 metres: how it compares with the city average for a circle that size, the most common types, when they happen, and year by year.
+- **Search a neighbourhood** to jump straight to it.
+- **Compare two areas.** Place A and B, and both are listed side by side: counts, change from the year before, and each area's top crime types with their share of its reports.
+- **See the trend.** Trends shows the whole city year by year and hour by hour, with reports per day.
+- **Share what you see.** The link keeps the view, years, crime type, hours and the spots you picked.
+- **Use it your way.** It works on phones (the views sit in a bar at the bottom), with a keyboard, with a screen reader, and in light or dark mode.
 
-- **Map:** a heat map of reported incidents across the City of Vancouver.
-- **Filters:** choose any year or combination of years from 2016 to 2026, a crime type (for example "Home break-ins" or "Bike theft"), and a part of the day (morning, afternoon, evening or overnight, six hours each, so they compare fairly).
-- **Area summary:** click anywhere on the map to see what has been reported within 500 metres of that spot.
-- **Jump to a neighbourhood:** pick a neighbourhood from a list instead of searching the map.
-- **Compare:** view two areas side by side.
-- **Trends:** see how reported incidents have changed from year to year since 2016.
-- **About this data:** the source, date range, and known limitations, shown inside the app.
+## A one-minute walkthrough
 
-## Demo path
+You've just moved to Vancouver and you're choosing between two apartments, one in Mount Pleasant and one in Kitsilano.
 
-**Situation:** I've just moved to Vancouver and I'm choosing between two apartments, one in Mount Pleasant and one in Kitsilano. Everyone I ask has a different opinion about which area to avoid.
+1. Pick the years you care about, for example 2025 and 2026.
+2. Drag across the evening hours on the time-of-day chart, if evenings are when you'll be out.
+3. Click near the Mount Pleasant apartment to see what's been reported around it and how that compares with the city.
+4. Open **Compare**, then click near the Kitsilano apartment. The two areas line up side by side.
+5. Check **Trends** to see whether one year was unusual.
 
-**Action:** On the map, select "Home break-ins" and see where they cluster. Open **Compare** to put both areas side by side, then check **Trends** to see whether things have been rising or falling since 2016.
+Instead of reading Reddit threads or asking about one area at a time, you see both places on the same data, with the source and its limits in the app.
 
-**Result:** In under a minute I can see what has been reported near each apartment, when it tends to happen, and whether one year was unusual, instead of relying on Reddit threads or one-area-at-a-time AI answers.
+## About the data
 
-**Before:** days of searching Reddit and asking an AI assistant about one area at a time, with no way to see sources or compare areas side by side.
-**After:** one place to compare areas on the same data, with the source and limitations visible.
+- **Source:** Vancouver Police Department, [GeoDASH Open Data](https://geodash.vpd.ca/opendata/).
+- **What's in it:** about 375,000 mapped incidents from January 2016 to the latest weekly update. These are incidents police confirmed happened ("founded"), dated by when they occurred.
+- **Kept up to date:** a GitHub Action refreshes it every Sunday after VPD republishes.
+- **Where it's approximate:** VPD offsets every location for privacy. Property crime is moved to the hundred block, and offences against a person are spread across several blocks. That's why the map stops at street level and summaries use a 500 m circle.
+- **What isn't on the map:** violent crime ("offence against a person" and homicide) has no location in VPD's data, so it can't be mapped. The app counts what's missing in **About this data**.
 
-## How to run it locally
+The full limitations are under [Responsible use](#responsible-use-and-disclaimer) and in the Datathon evidence at the bottom of this page.
 
-`web/data.json` is already in the repo, so to just run the app:
+## Run it locally
+
+`web/data.json` is already in the repository, so you only need Python to serve the folder:
 
 ```
 cd web
 python -m http.server 8000
 ```
 
-Then open `http://localhost:8000`. The page needs a local server; opening `index.html` by double-clicking won't load the data.
+Then open `http://localhost:8000`. It needs a local server: opening `index.html` directly can't load the data.
 
-### Keeping the data up to date
+### Refresh the data yourself
 
-`web/data.json` refreshes itself: every Sunday at 19:00 UTC (noon in Vancouver in summer, 11 am in winter, after VPD republishes GeoDASH that morning), a GitHub Action ([`.github/workflows/update-data.yml`](.github/workflows/update-data.yml)) downloads each year from 2016 to now, rebuilds `data.json` and commits it if anything changed. To run it early, open the **Actions** tab, pick **Update crime data** and click **Run workflow**.
+The weekly Action ([`.github/workflows/update-data.yml`](.github/workflows/update-data.yml)) runs every Sunday at 19:00 UTC: noon in Vancouver in summer, 11 am in winter. It downloads every year from 2016 to now, rebuilds `data.json`, and commits it only if something changed. To run it early, open the **Actions** tab, pick **Update crime data**, and click **Run workflow**.
 
 To do the same on your own computer, from the project folder:
 
@@ -56,43 +68,89 @@ To do the same on your own computer, from the project folder:
 python scripts/update_data.py
 ```
 
-This needs only standard Python, with nothing to install. It leaves `data.json` alone when VPD has nothing new, and refuses to replace it if the new data has more than 5% fewer incidents, which usually means a broken download (add `--force` if the drop is real). By using the data you agree to VPD's [disclaimer](data/vpd/legal_disclaimer.txt).
+It needs only standard Python, with nothing to install. It has three safeguards:
 
-To rebuild from CSVs you downloaded yourself, unzip them into `data/raw/` and run `python scripts/prepare_data.py`. It prints a summary of rows kept and excluded, and writes `web/data.json`.
+- **No new data:** it leaves `data.json` alone when VPD has nothing new.
+- **A big drop:** it refuses to replace the file if the new data has more than 5% fewer incidents, which usually means a broken download. Add `--force` if the drop is real.
+- **Bad text:** it stops if a crime type or neighbourhood name contains characters that could become web page markup.
 
-## Choices we made, and why
+To build from CSVs you downloaded yourself, unzip them into `data/raw/` and run `python scripts/prepare_data.py`. By using the data you agree to VPD's [disclaimer](data/vpd/legal_disclaimer.txt).
+
+## How it's built
+
+A static site with no framework and no build step. It's deployed on Netlify from the `web/` folder (see `netlify.toml`).
+
+```
+├── README.md
+├── netlify.toml          # publishes web/ on Netlify
+├── .github/workflows/
+│   └── update-data.yml   # refreshes web/data.json every Sunday
+├── data/
+│   ├── raw/              # create locally for VPD CSVs (not in the repo)
+│   └── vpd/              # VPD's disclaimer and data description
+├── docs/
+│   └── vanscene-demo.gif # the animation at the top of this page
+├── scripts/
+│   ├── update_data.py    # downloads the latest VPD data, then runs prepare_data.py
+│   └── prepare_data.py   # turns the raw CSVs into web/data.json
+└── web/
+    ├── index.html        # the page
+    ├── styles.css        # the look, light and dark
+    ├── app.js            # the map, filters and panels
+    └── data.json         # processed data the app loads
+```
+
+### Choices we made, and why
 
 | Choice | Why |
 |---|---|
-| A static web page (plain HTML, CSS, JavaScript) with no framework or build step | Simple to run, review, and host; matches the Session 2 goal of a working static frontend |
-| Python standard library only for data preparation | Teammates and mentors can run it without installing anything |
-| Leaflet with Leaflet.heat on OpenStreetMap tiles | Free, open source, and no API keys or accounts needed |
-| Converting VPD's UTM Zone 10 coordinates to latitude/longitude in our script | Lets the data line up with any standard map; accurate to well under a metre, far finer than VPD's privacy offsets |
-| Map zoom capped at roughly street level | VPD offsets locations, so building-level zoom would imply precision the data doesn't have |
-| A 500-metre radius for area summaries | Large enough to absorb VPD's location offsets, small enough to describe a neighbourhood around a specific address |
-| Plain-language crime type labels (for example "Theft from cars" instead of "Theft from Vehicle") | Newcomers shouldn't need to learn police categories to use the app |
-| Records without a location are left off the map and counted in the About section | VPD withholds locations for offences against a person; we say so rather than hide it |
+| Plain HTML, CSS and JavaScript, no framework or build step | Easy to run, review and host, and anyone on the team can change it |
+| Python standard library only for the data scripts | Teammates and mentors can run them without installing anything |
+| Leaflet and Leaflet.heat on OpenStreetMap tiles | Free and open source, with no API keys or accounts |
+| One fixed colour scale for every year and crime type | The same colour means the same amount everywhere, so years and types can be compared |
+| Four equal six-hour parts of the day, compared per hour | Unequal periods made the longest one look busiest just because it was longer |
+| Comparing an area with the city average for the same size of circle | A raw count alone says little; busy places will always show more |
+| Map zoom capped at about street level, and a 500 m summary circle | VPD offsets locations, so building-level detail would imply precision the data doesn't have |
+| Plain-language crime type labels (for example "Theft from cars" instead of "Theft from Vehicle") | Newcomers shouldn't need to learn police categories |
+| Points stored column by column in `data.json` | The download is about 45% smaller, which matters most on phones |
+| A weekly GitHub Action for the data | The map stays current without anyone remembering to update it |
 
-## What works now, and what's next
+## Contributing
 
-**Works now**
-- [x] Heat map of 374,186 mapped incidents, 2016 to October 2, 2026
-- [x] Filters for year, crime type, and time of day
-- [x] Click-anywhere 500 m area summary and neighbourhood jump list
-- [x] Compare and Trends views
-- [x] In-app "About this data" with source and limitations
+Open an issue or a pull request against `main`. Keep changes small and focused, run the app locally to check them, and describe what changed and how you tested it in the pull request.
 
-**Next (Build Session 3)**
-- [ ] Deploy from this repository with GitHub Pages and add the link above
+## What's next
+
 - [ ] Add a feedback link and test with newcomers outside the team
 - [ ] Check that testers don't read the map as a safety rating
 - [ ] Add violent-crime counts to neighbourhood summaries (these rows have a neighbourhood but no map location)
 - [ ] Explore adjusting counts for population or foot traffic, so busy areas aren't unfairly highlighted
-- [ ] Note in the app that SkyTrain incidents are excluded (Transit Police jurisdiction)
+- [ ] Note in the app that SkyTrain incidents are excluded (they're Transit Police jurisdiction)
+
+## Responsible use and disclaimer
+
+- **Not a safety rating.** VanScene shows where incidents were reported. It does not measure how safe an area is or predict future incidents.
+- **Reported incidents only.** Many crimes go unreported, and reporting rates differ by crime type and community.
+- **Approximate locations.** VPD offsets incident locations for privacy, and exact addresses are never shown. The 500-metre area is an estimate, not a precise boundary.
+- **Violent crime isn't on the map.** VPD withholds locations for offences against a person, so the map shows property crime and traffic collisions only.
+- **Counts, not rates.** Busy areas with more residents, workers, and visitors naturally show more reports. Figures are not adjusted for population or foot traffic.
+- **Data limitations.** VPD open data can be delayed, revised, or reclassified. We can't guarantee figures are complete or current.
+- **Responsible use.** Don't use VanScene to discriminate against people or communities, or as the sole basis for housing, rental, insurance, or employment decisions.
+
+VanScene is an informational and educational project built for the Build Trilemma Datathon. It is not affiliated with, endorsed by, or operated by the Vancouver Police Department or the City of Vancouver. It is provided "as is," without warranties of any kind.
+
+**Data source:** Vancouver Police Department, [GeoDASH Open Data](https://geodash.vpd.ca/opendata/).
+
+**In an emergency, call 911.** VanScene is not an emergency or crime reporting service.
 
 ---
 
-## Build Session 1: Problem evidence
+## Datathon evidence
+
+Our Build Session 1 write-up for the Build Trilemma Datathon, kept as submitted. Click a section to open it.
+
+<details>
+<summary><b>Build Session 1: Problem evidence</b></summary>
 
 ### The problem is real
 
@@ -150,7 +208,10 @@ A microproduct: one web page, one dataset, one core interaction.
 - [x] The solution does not require building an entire platform or company
 - [x] I can define what a useful first version looks like
 
-## Build Session 1: Data evidence
+</details>
+
+<details>
+<summary><b>Build Session 1: Data evidence</b></summary>
 
 ### Source
 
@@ -229,38 +290,4 @@ Initial exploration of 2026 data (January 1 to October 2, 2026):
 - [x] I believe there is enough signal in the data to support a useful solution
 - [x] I have enough coverage, quality, and volume to test that assumption
 
----
-
-## Repository structure
-
-```
-├── README.md
-├── .gitignore            # excludes raw VPD CSVs and zip files
-├── .github/workflows/
-│   └── update-data.yml   # refreshes web/data.json every Sunday
-├── data/
-│   ├── raw/              # create locally for the VPD CSVs (not in the repo)
-│   └── vpd/              # VPD's legal disclaimer and data description
-├── scripts/
-│   ├── update_data.py    # downloads the latest VPD data and runs prepare_data.py
-│   └── prepare_data.py   # turns the raw CSVs into web/data.json
-└── web/
-    ├── index.html        # the app
-    └── data.json         # processed data the app loads
-```
-
-## Responsible use and disclaimer
-
-- **Not a safety rating.** VanScene shows where incidents were reported. It does not measure how safe an area is or predict future incidents.
-- **Reported incidents only.** Many crimes go unreported, and reporting rates differ by crime type and community.
-- **Approximate locations.** VPD offsets incident locations for privacy, and exact addresses are never shown. The 500-metre area is an estimate, not a precise boundary.
-- **Violent crime isn't on the map.** VPD withholds locations for offences against a person, so the map shows property crime and traffic collisions only.
-- **Counts, not rates.** Busy areas with more residents, workers, and visitors naturally show more reports. Figures are not adjusted for population or foot traffic.
-- **Data limitations.** VPD open data can be delayed, revised, or reclassified. We can't guarantee figures are complete or current.
-- **Responsible use.** Don't use VanScene to discriminate against people or communities, or as the sole basis for housing, rental, insurance, or employment decisions.
-
-VanScene is an informational and educational project built for the Build Trilemma Datathon. It is not affiliated with, endorsed by, or operated by the Vancouver Police Department or the City of Vancouver. It is provided "as is," without warranties of any kind.
-
-**Data source:** Vancouver Police Department, [GeoDASH Open Data](https://geodash.vpd.ca/opendata/).
-
-**In an emergency, call 911.** VanScene is not an emergency or crime reporting service.
+</details>
