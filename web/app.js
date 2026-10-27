@@ -473,11 +473,19 @@ function busiestShort(buckets) {
   if (!total) return "–";
   return top ?? (total < MIN_FOR_BUSIEST ? "too few to tell" : "no clear peak");
 }
+// One sentence a screen reader reads in place of an hour chart (its bars are pictures)
+function hourSummary(hours, what) {
+  const total = hours.reduce((a, b) => a + b, 0);
+  if (!total) return `${what} by hour of the day: none with a known time.`;
+  const peak = hours.indexOf(Math.max(...hours)), low = hours.indexOf(Math.min(...hours));
+  return `${what} by hour of the day: busiest at ${fmtHour(peak)} with ${fmt(hours[peak])}, quietest at ${fmtHour(low)} with ${fmt(hours[low])}.`;
+}
+const attr = (t) => t.replace(/"/g, "&quot;");
 // The area card's bar per hour, coloured like the filter's hour bars: the picked hours in the accent, or every hour
 // in a softer accent for any time
 function hourStrip(hours) {
   const max = Math.max(1, ...hours);
-  return `<div class="hbars hbars-sm${state.hours ? "" : " all-in"}">${TRACK_ORDER.map((h, i) =>
+  return `<div class="hbars hbars-sm${state.hours ? "" : " all-in"}" role="img" aria-label="${attr(hourSummary(hours, "Reports near here"))}">${TRACK_ORDER.map((h, i) =>
     `<i class="${state.hours?.has(h) ? "on" : ""}" style="height:${(hours[h] / max) * 100}%;--i:${i}" title="${fmtHour(h)}: ${fmt(hours[h])}"></i>`).join("")}</div>
     <div class="hbars-x"><span>6 am</span><span>12 pm</span><span>6 pm</span><span>12 am</span><span>6 am</span></div>`;
 }
@@ -489,13 +497,16 @@ function drawTrackBars() {
   for (const p of state.data.points) if (p[HOUR] >= 0 && matches(p, state.shown, { ignoreTime: true })) hours[p[HOUR]]++;
   const max = Math.max(1, ...hours), strip = $("track-bars");
   if (strip.children.length !== 24)   // made once, so later changes animate
-    strip.innerHTML = TRACK_ORDER.map((h) => `<button type="button" class="hr" data-hour="${h}" aria-label="${fmtHour(h)}"><i></i></button>`).join("");
+    strip.innerHTML = TRACK_ORDER.map((h) => `<button type="button" class="hr" data-hour="${h}"><i></i></button>`).join("");
   for (const bar of strip.children) {
     const h = Number(bar.dataset.hour);
     bar.firstChild.style.height = `${(hours[h] / max) * 100}%`;
     bar.setAttribute("aria-pressed", String(!!state.hours?.has(h)));   // blue only for hours you picked; grey for any time
     bar.title = `${fmtHour(h)}: ${fmt(hours[h])} reports`;
+    bar.setAttribute("aria-label", bar.title);
   }
+  // The summary is in the name: NVDA read the group's name on the way in but skipped a separate description
+  strip.setAttribute("aria-label", `Hours of the day. ${hourSummary(hours, "Reports city-wide")} Click or drag across them to pick hours, or use the arrow keys and Enter.`);
   // One Tab stop for the 24 hours (the focused one, else the first picked, else 6 am); arrows move between them
   const stop = strip.contains(document.activeElement) ? document.activeElement : strip.querySelector('[aria-pressed="true"]') || strip.firstChild;
   for (const bar of strip.children) bar.tabIndex = bar === stop ? 0 : -1;
@@ -782,12 +793,21 @@ function yearBar(y, n, max, i) {
   const pace = fullYearPace(y, n);
   return `<i class="part ${on}" style="height:${(pace / max) * 100}%;--i:${i}" title="${y}: ${fmt(n)} to ${throughLabel()}, about ${fmt(Math.round(pace))} at this pace for the whole year"><b style="height:${pace ? (n / pace) * 100 : 0}%"></b></i>`;
 }
+// One sentence a screen reader reads in place of a year chart
+function yearSummary(span, perYear, what) {
+  const whole = span.filter((y) => !isPartial(y) && !missingYears().includes(y));
+  const n = (y) => perYear.get(y) || 0;
+  const hi = whole.reduce((a, y) => (n(y) > n(a) ? y : a), whole[0]), lo = whole.reduce((a, y) => (n(y) < n(a) ? y : a), whole[0]);
+  const p = state.data.partialYear;
+  return `${what} per year, ${span[0]} to ${span[span.length - 1]}: highest in ${hi} with ${fmt(n(hi))}, lowest in ${lo} with ${fmt(n(lo))}.` +
+    (span.includes(p) ? ` ${p} so far: ${fmt(n(p))} to ${throughLabel()}, about ${fmt(Math.round(fullYearPace(p, n(p))))} at that pace for the year.` : "");
+}
 const paceNote = () => `${state.data.partialYear} is Jan 1 to ${throughLabel()}; the dashed outline is its pace for a full year.`;
 function yearSpark(perYear) {
   const ys = state.data.years, first = ys[0], last = ys[ys.length - 1], missing = missingYears();
   const span = []; for (let y = first; y <= last; y++) span.push(y);
   const max = Math.max(1, ...span.map((y) => fullYearPace(y, perYear.get(y) || 0)));
-  return `<div class="spark">${span.map((y, i) => missing.includes(y)
+  return `<div class="spark" role="img" aria-label="${attr(yearSummary(span, perYear, "Reports near here"))}">${span.map((y, i) => missing.includes(y)
     ? `<i class="gap" title="No ${y} data"></i>`
     : yearBar(y, perYear.get(y) || 0, max, i)).join("")}</div>
     <div class="spark-x"><span>${first}</span>${missing.length ? `<span>${missing.join(", ")} no data</span>` : ""}<span>${last}</span></div>
@@ -1068,12 +1088,12 @@ function renderTrends() {
       <div class="metric">${fourth}</div>
     </div>
     <div class="tsec"><h3>Year by year</h3>
-      <div class="ybars">${span.map((y, i) => `<div>${missing.includes(y)
+      <div class="ybars" role="img" aria-label="${attr(yearSummary(span, perYear, "Reports city-wide"))}">${span.map((y, i) => `<div>${missing.includes(y)
         ? `<i class="gap" style="height:30%" title="No ${y} data"></i>`
         : yearBar(y, perYear.get(y) || 0, maxY, i)}<span>${String(y).slice(2)}</span></div>`).join("")}</div>
       <p class="hint">Coloured bars are the years you've selected.${missing.length ? ` No data for ${missing.join(", ")}.` : ""}${state.data.partialYear ? ` ${paceNote()}` : ""}</p></div>
     <div class="tsec"><h3>Hour of the day</h3>
-      <div class="hbars">${TRACK_ORDER.map((h, i) => `<i style="height:${(hours[h] / maxH) * 100}%;--i:${i}" title="${fmtHour(h)}: ${fmt(hours[h])}"></i>`).join("")}</div>
+      <div class="hbars" role="img" aria-label="${attr(hourSummary(hours, "Reports city-wide"))}">${TRACK_ORDER.map((h, i) => `<i style="height:${(hours[h] / maxH) * 100}%;--i:${i}" title="${fmtHour(h)}: ${fmt(hours[h])}"></i>`).join("")}</div>
       <div class="hbars-x"><span>6 am</span><span>12 pm</span><span>6 pm</span><span>12 am</span><span>6 am</span></div></div>
     ${state.type === "all" ? `<div class="tsec"><h3>Most common</h3>${typeBars(top, 6)}</div>` : ""}
     ${areaHtml}`;
@@ -1326,6 +1346,13 @@ function noLocationCount() {
   for (const [y, count] of Object.entries(state.data.noLocationByYear || {})) if (state.shown.years.has(Number(y))) n += count;
   return n;
 }
+// The legend is a picture of the heat colours, so it gets one sentence (redone when the theme or filters change)
+function labelLegend() {
+  const dark = document.documentElement.getAttribute("data-theme") === "dark";
+  $("legend").setAttribute("aria-label", `Map key, ${$("legend-title").textContent.toLowerCase()}: ` +
+    (dark ? "dark purple where fewer are reported, through orange, to pale yellow where most are." : "pale amber where fewer are reported, through rose, to deep plum where most are.") +
+    ($("legend-note").hidden ? "" : ` ${$("legend-note").textContent}`));
+}
 function renderAbout() {
   const d = state.data;
   const through = new Date(d.latestDate + "T12:00:00").toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric" });
@@ -1340,6 +1367,7 @@ function renderAbout() {
   $("legend-title").textContent = state.hours
     ? `${cap(timeLabel())}, per hour${full ? `; ${full}` : ""}`
     : full ? `Per year, ${full}` : "Incidents per year";
+  labelLegend();
 }
 
 // Visitors get a plain message and a way to retry; the steps for whoever runs the site go to the console
@@ -1370,7 +1398,6 @@ $("filters-btn").addEventListener("click", () => {
 
 function syncThemeButton() {
   const dark = document.documentElement.getAttribute("data-theme") === "dark";
-  $("theme-toggle").setAttribute("aria-pressed", String(dark));
   $("theme-toggle").title = dark ? "Switch to light mode" : "Switch to dark mode";
   $("theme-toggle").setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
 }
@@ -1382,6 +1409,7 @@ $("theme-toggle").addEventListener("click", () => {
   paintCoverage();                                            // re-colour the inside/outside shading
   paintCircles();
   heat.setOptions({ gradient: heatGradient() });
+  if (state.data) labelLegend();
 });
 syncThemeButton();
 
