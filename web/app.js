@@ -985,50 +985,58 @@ for (const [slot, handle, circle] of [["a", handleA, circleA], ["b", handleB, ci
   handle.on("click", () => pickSlot(slot));
 }
 
-function renderCompare() {
-  const A = state.a && areaStats(state.a), B = state.b && areaStats(state.b);
-  const card = (s, slot) => {
-    const colour = slot === "A" ? "var(--sea)" : "var(--b)", placing = state.nextSlot === slot.toLowerCase();
-    // An empty card is a button: click it to pick that area, then click the map
-    if (!s) return `<button type="button" class="cmp empty${placing ? " placing" : ""}" data-action="slot-${slot.toLowerCase()}">
-      <span><b style="color:${colour}">${slot}</b> · ${placing ? `Click the map to place area ${slot}, then drag its label to move it` : `Pick ${slot}, then click the map`}</span></button>`;
-    return `<div class="cmp${placing ? " placing" : ""}"><h3 class="who"><b style="background:${colour}">${slot}</b>Near ${s.name}</h3>
-      <p class="big" data-count="${s.now}" data-key="${slot}">${fmt(s.now)}</p>${s.change ? `<span class="pill ${s.change.cls}" title="${s.change.text}">${s.change.text.replace("same dates ", "")}</span>` : ""}
-      <p class="hint">Busiest per hour: ${busiestShort(s.buckets)}</p></div>`;
-  };
-  // Head to head: one row per crime type (the top three of each area) or per part of the day, A and B side by side,
-  // each with its share of that area's reports so a quiet and a busy area can still be compared
-  const cell = (s, n) => (s ? `<span class="n">${fmt(n)} <small>${s.now ? Math.round((n / s.now) * 100) : 0}%</small></span>` : `<span class="n">–</span>`);
+// One area's card, or an empty card for an area not placed yet (slot is "A" or "B")
+function compareCard(s, slot) {
+  const colour = slot === "A" ? "var(--sea)" : "var(--b)", placing = state.nextSlot === slot.toLowerCase();
+  // An empty card is a button: click it to pick that area, then click the map
+  if (!s) return `<button type="button" class="cmp empty${placing ? " placing" : ""}" data-action="slot-${slot.toLowerCase()}">
+    <span><b style="color:${colour}">${slot}</b> · ${placing ? `Click the map to place area ${slot}, then drag its label to move it` : `Pick ${slot}, then click the map`}</span></button>`;
+  return `<div class="cmp${placing ? " placing" : ""}"><h3 class="who"><b style="background:${colour}">${slot}</b>Near ${s.name}</h3>
+    <p class="big" data-count="${s.now}" data-key="${slot}">${fmt(s.now)}</p>${s.change ? `<span class="pill ${s.change.cls}" title="${s.change.text}">${s.change.text.replace("same dates ", "")}</span>` : ""}
+    <p class="hint">Busiest per hour: ${busiestShort(s.buckets)}</p></div>`;
+}
+// Head to head: one row per crime type (the top three of each area) or per part of the day, as [name, A's count, B's count]
+function compareRows(A, B) {
   const countOf = (s, t) => s?.top.find(([x]) => x === t)?.[1] || 0;
-  const rows = state.type === "all"
+  return state.type === "all"
     ? [...new Set([...(A?.top || []).slice(0, 3), ...(B?.top || []).slice(0, 3)].map(([t]) => t))].map((t) => [t, countOf(A, t), countOf(B, t)])
     : Object.keys(IN_BUCKET).map((k) => [cap(k), A?.buckets[k] || 0, B?.buckets[k] || 0]);
-  const table = A || B ? `<div class="h2h"><h3 class="sec">${state.type === "all" ? "Most common" : "By time of day"}</h3><b>A</b><b>B</b>
-    ${rows.map(([t, a, b]) => `<span>${t}</span>${cell(A, a)}${cell(B, b)}`).join("")}</div>` : "";
-  let insight = "";
-  if (A && B && (A.now || B.now)) {
-    const [hi, lo, hiN, loN] = A.now >= B.now ? [A, B, "A", "B"] : [B, A, "B", "A"];
-    const ratio = hi.now / Math.max(lo.now, 1);
-    // A ratio against a handful of reports ("524.0×") says less than the two counts do
-    const parts = [ratio < 1.15 ? "A and B have a similar number of reports."
-      : lo.now < CONFIG.minForChange ? `Area ${hiN} has ${fmt(hi.now)} reports against ${fmt(lo.now)} at area ${loN}.`
-      : `Area ${hiN} has about ${ratio.toFixed(1)}× the reports of area ${loN}.`];
-    // The crime type whose share differs most between the two areas
-    if (state.type === "all" && A.now >= 20 && B.now >= 20) {
-      const share = (s) => new Map(s.top.map(([t, n]) => [t, n / s.now]));
-      const sa = share(A), sb = share(B);
-      let best = null;
-      for (const [t] of rows) {   // only types in the table above, so the insight never names one it doesn't show
-        const pa = sa.get(t) || 0, pb = sb.get(t) || 0, hiShare = Math.max(pa, pb), loShare = Math.min(pa, pb);
-        if (hiShare < 0.06) continue;
-        const r = hiShare / Math.max(loShare, 0.01);
-        if (r >= 1.6 && (!best || r > best.r)) best = { t, r, where: pa > pb ? "A" : "B", pa, pb };
-      }
-      if (best) parts.unshift(`${best.t} is a bigger share at ${best.where} (${Math.round(best.where === "A" ? best.pa * 100 : best.pb * 100)}% vs ${Math.round(best.where === "A" ? best.pb * 100 : best.pa * 100)}%).`);
+}
+// The rows with A and B side by side, each with its share of that area's reports so a quiet and a busy area can still be compared
+function compareTable(A, B, rows) {
+  if (!A && !B) return "";
+  const cell = (s, n) => (s ? `<span class="n">${fmt(n)} <small>${s.now ? Math.round((n / s.now) * 100) : 0}%</small></span>` : `<span class="n">–</span>`);
+  return `<div class="h2h"><h3 class="sec">${state.type === "all" ? "Most common" : "By time of day"}</h3><b>A</b><b>B</b>
+    ${rows.map(([t, a, b]) => `<span>${t}</span>${cell(A, a)}${cell(B, b)}`).join("")}</div>`;
+}
+// A line or two on how the two areas differ, once both are placed
+function compareInsight(A, B, rows) {
+  if (!A || !B || (!A.now && !B.now)) return "";
+  const [hi, lo, hiN, loN] = A.now >= B.now ? [A, B, "A", "B"] : [B, A, "B", "A"];
+  const ratio = hi.now / Math.max(lo.now, 1);
+  // A ratio against a handful of reports ("524.0×") says less than the two counts do
+  const parts = [ratio < 1.15 ? "A and B have a similar number of reports."
+    : lo.now < CONFIG.minForChange ? `Area ${hiN} has ${fmt(hi.now)} reports against ${fmt(lo.now)} at area ${loN}.`
+    : `Area ${hiN} has about ${ratio.toFixed(1)}× the reports of area ${loN}.`];
+  // The crime type whose share differs most between the two areas
+  if (state.type === "all" && A.now >= 20 && B.now >= 20) {
+    const share = (s) => new Map(s.top.map(([t, n]) => [t, n / s.now]));
+    const sa = share(A), sb = share(B);
+    let best = null;
+    for (const [t] of rows) {   // only types in the table, so the insight never names one it doesn't show
+      const pa = sa.get(t) || 0, pb = sb.get(t) || 0, hiShare = Math.max(pa, pb), loShare = Math.min(pa, pb);
+      if (hiShare < 0.06) continue;
+      const r = hiShare / Math.max(loShare, 0.01);
+      if (r >= 1.6 && (!best || r > best.r)) best = { t, r, where: pa > pb ? "A" : "B", hiShare, loShare };
     }
-    parts.push("Busier spots usually have more people, shops and transit, so they get more reports.");
-    insight = `<div class="tip">${ICON_INFO}<span>${parts.join(" ")}</span></div>`;
+    if (best) parts.unshift(`${best.t} is a bigger share at ${best.where} (${Math.round(best.hiShare * 100)}% vs ${Math.round(best.loShare * 100)}%).`);
   }
+  parts.push("Busier spots usually have more people, shops and transit, so they get more reports.");
+  return `<div class="tip">${ICON_INFO}<span>${parts.join(" ")}</span></div>`;
+}
+
+function renderCompare() {
+  const A = state.a && areaStats(state.a), B = state.b && areaStats(state.b), rows = compareRows(A, B);
   $("compare").innerHTML = `${sheetHandle}
     <div class="cmp-head"><div><h2>Compare two areas</h2>
       <p>Within ${CONFIG.radiusMeters} m of each spot, ${periodLabel()} · ${filterLine()}.</p></div>
@@ -1036,7 +1044,7 @@ function renderCompare() {
         <div class="slot-pick" role="group" aria-label="Which area a map click places"><span>Place</span>
           <button type="button" class="ab a" data-action="slot-a" aria-pressed="${state.nextSlot === "a"}">A</button><button type="button" class="ab b" data-action="slot-b" aria-pressed="${state.nextSlot === "b"}">B</button></div>
         <button type="button" class="btn" data-action="swap">Swap</button><button type="button" class="btn" data-action="reset">Clear</button></div></div>
-    ${noYears() ? pickYear : `<div class="cmp-grid">${card(A, "A")}${card(B, "B")}</div>${table}${insight}`}`;
+    ${noYears() ? pickYear : `<div class="cmp-grid">${compareCard(A, "A")}${compareCard(B, "B")}</div>${compareTable(A, B, rows)}${compareInsight(A, B, rows)}`}`;
 }
 
 // ---------------------------------------------------------------------
@@ -1066,19 +1074,6 @@ function renderTrends() {
     days[weekday(p[YEAR], Math.floor(p[MD] / 100), p[MD] % 100)]++;
   }
   const top = ranked(types).map(([t, n]) => [state.data.types[t].label, n]);
-  const ch = changeInfo(total, before);
-  const peakHour = hours.indexOf(Math.max(...hours));
-  const sel = selectedYears();
-  let second;
-  if (ch && ch.pct !== undefined) second = `<p>vs ${compareName()}</p><p class="${ch.cls}">${ch.pct > 0 ? "+" : ""}${ch.pct}%</p><p>${fmt(before)} then</p>`;
-  else if (sel.length > 1) {
-    const busiestYear = sel.reduce((a, y) => ((perYear.get(y) || 0) > (perYear.get(a) || 0) ? y : a), sel[0]);
-    second = `<p>Busiest year</p><p>${busiestYear}</p><p>${fmt(perYear.get(busiestYear) || 0)} incidents</p>`;
-  } else second = `<p>Change</p><p>–</p><p>${ch ? ch.text : "No earlier year"}</p>`;
-  const fourth = state.type === "all" && top.length
-    ? `<p>Most common</p><p>${Math.round((top[0][1] / Math.max(total, 1)) * 100)}%</p><p>${top[0][0]}</p>`
-    : `<p>Busiest day</p><p>${WEEKDAYS[days.indexOf(Math.max(...days))].slice(0, 3)}</p><p>${Math.round((Math.max(...days) / Math.max(total, 1)) * 100)}% of reports</p>`;
-
   const span = yearSpan(), missing = missingYears();
   const maxY = Math.max(1, ...span.map((y) => fullYearPace(y, perYear.get(y) || 0)));
   const maxH = Math.max(1, ...hours);
@@ -1094,12 +1089,7 @@ function renderTrends() {
   $("trends").innerHTML = `${sheetHandle}
     <h2>Vancouver ${periodLabel()}</h2>
     <p class="sub">${filterLine()}. Click the map to add an area.</p>
-    <div class="metrics">
-      <div class="metric"><p>Per day</p><p>${fmt(Math.round(total / daysIn(sel)))}</p><p>${fmt(total)} ${sel.length === 1 && isPartial(sel[0]) ? `from Jan 1 to ${throughLabel()}` : `over ${sel.length} year${sel.length !== 1 ? "s" : ""}`}</p></div>
-      <div class="metric">${second}</div>
-      <div class="metric"><p>Busiest hour</p><p>${total ? fmtHour(peakHour) : "–"}</p><p>${total ? `${Math.round((hours[peakHour] / Math.max(1, sum(hours))) * 100)}% of reports` : "No times recorded"}</p></div>
-      <div class="metric">${fourth}</div>
-    </div>
+    ${trendMetrics({ total, before, perYear, top, hours, days })}
     <div class="tsec"><h3>Year by year</h3>
       <div class="ybars" role="img" aria-label="${attr(yearSummary(span, perYear, "Reports city-wide"))}">${span.map((y, i) => `<div>${missing.includes(y)
         ? `<i class="gap" style="height:30%" title="No ${y} data"></i>`
@@ -1110,6 +1100,28 @@ function renderTrends() {
       ${HOUR_AXIS}</div>
     ${state.type === "all" ? `<div class="tsec"><h3>Most common</h3>${typeBars(top, 6)}</div>` : ""}
     ${areaHtml}`;
+}
+
+// The four tiles at the top of Trends: per day, change (or busiest year), busiest hour, and most common type (or busiest day)
+function trendMetrics({ total, before, perYear, top, hours, days }) {
+  const ch = changeInfo(total, before);
+  const peakHour = hours.indexOf(Math.max(...hours));
+  const sel = selectedYears();
+  let second;
+  if (ch && ch.pct !== undefined) second = `<p>vs ${compareName()}</p><p class="${ch.cls}">${ch.pct > 0 ? "+" : ""}${ch.pct}%</p><p>${fmt(before)} then</p>`;
+  else if (sel.length > 1) {
+    const busiestYear = sel.reduce((a, y) => ((perYear.get(y) || 0) > (perYear.get(a) || 0) ? y : a), sel[0]);
+    second = `<p>Busiest year</p><p>${busiestYear}</p><p>${fmt(perYear.get(busiestYear) || 0)} incidents</p>`;
+  } else second = `<p>Change</p><p>–</p><p>${ch ? ch.text : "No earlier year"}</p>`;
+  const fourth = state.type === "all" && top.length
+    ? `<p>Most common</p><p>${Math.round((top[0][1] / Math.max(total, 1)) * 100)}%</p><p>${top[0][0]}</p>`
+    : `<p>Busiest day</p><p>${WEEKDAYS[days.indexOf(Math.max(...days))].slice(0, 3)}</p><p>${Math.round((Math.max(...days) / Math.max(total, 1)) * 100)}% of reports</p>`;
+  return `<div class="metrics">
+      <div class="metric"><p>Per day</p><p>${fmt(Math.round(total / daysIn(sel)))}</p><p>${fmt(total)} ${sel.length === 1 && isPartial(sel[0]) ? `from Jan 1 to ${throughLabel()}` : `over ${sel.length} year${sel.length !== 1 ? "s" : ""}`}</p></div>
+      <div class="metric">${second}</div>
+      <div class="metric"><p>Busiest hour</p><p>${total ? fmtHour(peakHour) : "–"}</p><p>${total ? `${Math.round((hours[peakHour] / Math.max(1, sum(hours))) * 100)}% of reports` : "No times recorded"}</p></div>
+      <div class="metric">${fourth}</div>
+    </div>`;
 }
 
 // ---------------------------------------------------------------------
@@ -1193,9 +1205,16 @@ function setView(view) {
 // Controls
 // ---------------------------------------------------------------------
 function buildControls() {
-  const { types, neighbourhoods, points } = state.data;
+  buildYearPicker();
+  buildTypePicker();
+  bindTimeControls();
+  bindSearch();
+  bindMapClicks();
+  bindPanelButtons();
+}
 
-  // Years: an "All years" button, then one button per year, newest first
+// Years: an "All years" button, then one button per year, newest first
+function buildYearPicker() {
   const ys = state.data.years;
   const missing = missingYears();
   const span = yearSpan().reverse();   // newest first, gaps included
@@ -1226,8 +1245,11 @@ function buildControls() {
     }
     refresh();
   });
+}
 
-  // Crime types, most common first (across all years)
+// Crime types, most common first (across all years)
+function buildTypePicker() {
+  const { types, points } = state.data;
   const totals = new Array(types.length).fill(0);
   for (const p of points) totals[p[TYPE]]++;
   const order = types.map((_, i) => i).sort((a, b) => totals[b] - totals[a]);
@@ -1239,10 +1261,11 @@ function buildControls() {
     state.type = e.target.value === "all" ? "all" : Number(e.target.value);
     refresh();
   });
+}
 
-  bindTimeControls();
-
-  // Neighbourhood search: pick from the list (or type part of a name and press Enter)
+// Neighbourhood search: pick from the list (or type part of a name and press Enter)
+function bindSearch() {
+  const { neighbourhoods } = state.data;
   const goToHood = () => {
     const q = $("search").value.trim().toLowerCase();
     if (!q) return;
@@ -1296,7 +1319,10 @@ function buildControls() {
     }
   });
   input.addEventListener("click", () => { if (list.hidden) openList(); });   // already focused, so no focus event
+}
 
+// A click on the map picks a spot; on screens with a cursor, a dashed circle previews it
+function bindMapClicks() {
   map.on("click", (e) => {
     // Outside the data there's nothing to summarize, so say so and keep whatever was selected
     if (isOutside(e.latlng)) return showToast(OUTSIDE_NOTE);
@@ -1312,8 +1338,10 @@ function buildControls() {
     });
     map.on("mouseout", () => ghost.remove());
   }
+}
 
-  // Buttons inside the panels (close, swap, clear, open map)
+// Buttons inside the panels (sheet handle, close, swap, clear, open map, place A or B)
+function bindPanelButtons() {
   for (const id of ["area", "compare", "trends"]) {
     $(id).addEventListener("click", (e) => {
       if (e.target.closest(".sheet-handle")) {
