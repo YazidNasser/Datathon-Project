@@ -710,6 +710,12 @@ function fitTo(bounds, maxZoom = 14) {
   map.fitBounds(bounds, { ...panelPadding(L.latLngBounds(bounds)), maxZoom, animate: !reduceMotion });
 }
 const areaBounds = (ll) => ll.toBounds(CONFIG.radiusMeters * 3.2);
+// Move the map only if part of `bounds` is hidden behind a panel or off screen, and never zoom in to do it
+function keepInView(bounds) {
+  const o = panelPadding(bounds), size = map.getSize();
+  const seen = L.latLngBounds(map.containerPointToLatLng(o.paddingTopLeft), map.containerPointToLatLng(size.subtract(o.paddingBottomRight)));
+  if (!seen.contains(bounds)) fitTo(bounds, map.getZoom());
+}
 function fitForView() {
   if (state.view === "map" && state.selected) return fitTo(areaBounds(state.selected));
   if (state.view === "compare" && state.a && state.b) return fitTo(areaBounds(state.a).extend(areaBounds(state.b)), 15);
@@ -920,6 +926,8 @@ function setCompareSpot(ll) {
   syncCircles();
   growCircle(slot === "a" ? circleA : circleB);
   renderPanels();
+  // With both placed, show both: area B could land behind the bottom sheet on a phone once its card filled in
+  if (state.a && state.b) keepInView(areaBounds(state.a).extend(areaBounds(state.b)));
   const card = $("compare").querySelector(`[data-key="${slot.toUpperCase()}"]`);
   announce(`Area ${slot.toUpperCase()} placed near ${nearestHood(ll)}`, card?.dataset.count);
 }
@@ -1081,6 +1089,43 @@ function renderPanels() {
   const panel = $(PANEL_FOR[state.view]);
   panel.querySelector(".sheet-handle")?.setAttribute("aria-expanded", String(!panel.classList.contains("collapsed")));
   countUp(panel);
+  writeUrl();
+}
+
+// ---------------------------------------------------------------------
+// The link: view, filters and spots live in the address (after #), so a reload or a shared link opens the same thing
+// ---------------------------------------------------------------------
+const llText = (ll) => `${ll.lat.toFixed(4)},${ll.lng.toFixed(4)}`;
+function writeUrl() {
+  const q = new URLSearchParams({ view: state.view });
+  q.set("years", allSelected() ? "all" : selectedYears().join(",") || "none");
+  if (state.type !== "all") q.set("type", typeLabel());
+  if (state.hours) q.set("hours", TRACK_ORDER.filter((h) => state.hours.has(h)).join(","));
+  for (const k of ["selected", "a", "b"]) if (state[k]) q.set(k === "selected" ? "spot" : k, llText(state[k]));
+  history.replaceState(null, "", `#${String(q).replaceAll("%2C", ",")}`);   // plain commas read better in a shared link
+}
+// Anything missing or not valid is skipped (and drops out of the address on the next write)
+function readUrl() {
+  const q = new URLSearchParams(location.hash.slice(1)), ys = state.data.years;
+  const years = q.get("years");
+  if (years === "all") state.years = new Set(ys);
+  else if (years === "none") state.years = new Set();
+  else if (years) {
+    const picked = years.split(",").map(Number).filter((y) => ys.includes(y));
+    if (picked.length) state.years = new Set(picked);
+  }
+  const type = state.data.types.findIndex((t) => t.label === q.get("type"));
+  if (type >= 0) { state.type = type; $("type").value = String(type); }
+  if (q.get("hours")) setHours(new Set(q.get("hours").split(",").map(Number).filter((h) => Number.isInteger(h) && h >= 0 && h < 24)));
+  const spot = (k) => {
+    const [lat, lng] = (q.get(k) || "").split(",").map(Number), ll = Number.isFinite(lat) && Number.isFinite(lng) && L.latLng(lat, lng);
+    return ll && !isOutside(ll) ? ll : null;
+  };
+  state.selected = spot("spot"); state.a = spot("a"); state.b = spot("b");
+  state.nextSlot = state.a && !state.b ? "b" : "a";
+  if (state.selected) areaCircle.setLatLng(state.selected);
+  const view = q.get("view");
+  return ["map", "compare", "trends"].includes(view) ? view : null;
 }
 function syncCircles() {
   const show = (layer, on) => { if (on && !map.hasLayer(layer)) layer.addTo(map); if (!on && map.hasLayer(layer)) map.removeLayer(layer); };
@@ -1375,11 +1420,17 @@ async function start() {
   $("status").classList.remove("show");
   addCoverageMask(state.data.points);
   buildControls();
+  const linked = readUrl();
   buildPeriods();
-  setView(["map", "compare", "trends"].includes(CONFIG.defaultView) ? CONFIG.defaultView : "map");
+  setView(linked || (["map", "compare", "trends"].includes(CONFIG.defaultView) ? CONFIG.defaultView : "map"));
   refresh();
-  showToast(`Click anywhere on the map to see what's been reported within ${CONFIG.radiusMeters} m, or search a neighbourhood.`, 7000);
-  requestAnimationFrame(() => { map.invalidateSize(); map.fitBounds(CITY_BOUNDS, { ...panelPadding(L.latLngBounds(CITY_BOUNDS)), maxZoom: 13, animate: false }); });
+  const spotted = state.view === "compare" ? state.a : state.selected;
+  if (!spotted) showToast(`Click anywhere on the map to see what's been reported within ${CONFIG.radiusMeters} m, or search a neighbourhood.`, 7000);
+  requestAnimationFrame(() => {
+    map.invalidateSize();
+    if (spotted) fitForView();   // a link with a spot opens on it
+    else map.fitBounds(CITY_BOUNDS, { ...panelPadding(L.latLngBounds(CITY_BOUNDS)), maxZoom: 13, animate: false });
+  });
 }
 
 start();

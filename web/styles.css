@@ -376,10 +376,14 @@ body, .site-head, .panel, select, .search { transition: background-color 0.3s, c
   .filters:not(.open) { overflow: visible; }   /* the closed panel is one row: let the suggestions hang below it */
   .filters.open .filters-body, .filters.open details.about { display: flex; }
   .filters.open details.about { display: block; }
-  .legend { margin-top: 0; display: flex; align-items: center; gap: 8px; }
+  /* One row: Fewer, the ramp, More */
+  .legend { margin-top: 0; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 4px 8px; }
   .legend .lab { display: none; }
-  .legend .ramp { flex: 1; height: 7px; }
-  .legend .ends { margin: 0; gap: 0; display: contents; }
+  .legend .ramp { grid-area: 1 / 2; height: 7px; }
+  .legend .ends { display: contents; }
+  .legend .ends span:first-child { grid-area: 1 / 1; }
+  .legend .ends span:last-child { grid-area: 1 / 3; }
+  .legend-note { grid-column: 1 / -1; }
 
   .area, .compare, .trends { left: 0; right: 0; bottom: 0; top: auto; width: auto; max-height: 48%; border-radius: 18px 18px 0 0; border-bottom: 0; padding: 4px 16px 18px; }
   .sheet-handle { display: block; width: 100%; height: 32px; border: 0; background: transparent; cursor: pointer; position: sticky; top: 0; z-index: 1; }
