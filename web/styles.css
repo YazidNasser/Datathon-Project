@@ -48,6 +48,7 @@ html { height: 100%; }
 body { margin: 0; height: 100%; display: flex; flex-direction: column; font: 15px/1.45 var(--font); color: var(--ink); background: var(--page); }
 button, input, select { font: inherit; color: inherit; }
 h1, h2, h3, p { margin: 0; }
+p { text-wrap: pretty; }   /* no one-word last lines */
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 .place:focus { outline: none; }   /* focused by script after a pick, to move screen readers there; not a control */
 a { color: var(--sea); }

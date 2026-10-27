@@ -339,6 +339,10 @@ function growCircle(c) {
 const latestMd = () => { const [, m, d] = state.data.latestDate.split("-").map(Number); return m * 100 + d; };
 const throughLabel = () => { const md = latestMd(); return `${MONTHS[Math.floor(md / 100) - 1]} ${md % 100}`; };
 const isPartial = (y) => y === state.data.partialYear;
+// Days covered by these years: a full year, or for the year in progress, Jan 1 to the latest report
+const daysIn = (years) => Math.max(1, years.reduce((sum, y) => sum + (isPartial(y)
+  ? Math.round((new Date(state.data.latestDate + "T12:00:00") - new Date(y, 0, 1, 12)) / 864e5) + 1
+  : new Date(y, 1, 29).getMonth() === 1 ? 366 : 365), 0));
 // Years inside the data's range that have no incidents at all (e.g. a year missing from the CSV)
 function missingYears() {
   const ys = state.data.years, out = [];
@@ -764,7 +768,7 @@ function yearSpark(perYear) {
   return `<div class="spark">${span.map((y, i) => missing.includes(y)
     ? `<i class="gap" title="No ${y} data"></i>`
     : `<i class="${state.years.has(y) ? "on" : ""} ${isPartial(y) ? "part" : ""}" style="height:${((perYear.get(y) || 0) / max) * 100}%;--i:${i}" title="${y}: ${fmt(perYear.get(y) || 0)}"></i>`).join("")}</div>
-    <div class="spark-x"><span>${first}</span>${missing.length ? `<span>${missing.join(", ")} no data</span>` : ""}<span>${last}${state.data.partialYear === last ? "*" : ""}</span></div>`;
+    <div class="spark-x"><span>${first}</span>${missing.length ? `<span>${missing.join(", ")} no data</span>` : ""}<span>${last}${state.data.partialYear === last ? " to date" : ""}</span></div>`;
 }
 // A tip says a crime "is common here", so only give one where that's true compared with the city: a bigger share
 // of this area's reports than of the city's, or, with one type picked, clearly more of it than an average area
@@ -930,7 +934,7 @@ function renderCompare() {
     if (!s) return `<button type="button" class="cmp empty${placing ? " placing" : ""}" data-action="slot-${slot.toLowerCase()}">
       <span><b style="color:${colour}">${slot}</b> · ${placing ? `Click the map to place area ${slot}` : `Pick ${slot}, then click the map`}</span></button>`;
     return `<div class="cmp${placing ? " placing" : ""}"><h3 class="who"><b style="background:${colour}">${slot}</b>Near ${s.name}</h3>
-      <p class="big" data-count="${s.now}" data-key="${slot}">${fmt(s.now)}</p>${s.change ? `<span class="pill ${s.change.cls}">${s.change.text}</span>` : ""}
+      <p class="big" data-count="${s.now}" data-key="${slot}">${fmt(s.now)}</p>${s.change ? `<span class="pill ${s.change.cls}" title="${s.change.text}">${s.change.text.replace("same dates ", "")}</span>` : ""}
       <p class="hint">Busiest per hour: ${busiestShort(s.buckets)}</p></div>`;
   };
   // Head to head: one row per crime type (the top three of each area) or per part of the day, A and B side by side,
@@ -968,7 +972,7 @@ function renderCompare() {
   }
   $("compare").innerHTML = `${handle}
     <div class="cmp-head"><div><h2>Compare two areas</h2>
-      <p>Within ${CONFIG.radiusMeters} m of each spot, ${periodLabel()} · ${filterLine()}. Pick A or B, then click the map, or drag a label on the map.</p></div>
+      <p>Within ${CONFIG.radiusMeters} m of each spot, ${periodLabel()} · ${filterLine()}. Pick A or B, then click the map or drag its label.</p></div>
       <div class="cmp-actions">
         <div class="slot-pick" role="group" aria-label="Which area a map click places"><span>Place</span>
           <button type="button" class="ab a" data-action="slot-a" aria-pressed="${state.nextSlot === "a"}">A</button><button type="button" class="ab b" data-action="slot-b" aria-pressed="${state.nextSlot === "b"}">B</button></div>
@@ -1033,7 +1037,7 @@ function renderTrends() {
     <h2>Vancouver ${periodLabel()}</h2>
     <p class="sub">${filterLine()}. Click the map to add an area.</p>
     <div class="metrics">
-      <div class="metric"><p>Reported incidents</p><p data-count="${total}" data-key="trend">${fmt(total)}</p><p>${sel.length === 1 && isPartial(sel[0]) ? `Jan 1 to ${throughLabel()}` : `${sel.length} year${sel.length !== 1 ? "s" : ""}`}</p></div>
+      <div class="metric"><p>Per day</p><p>${fmt(Math.round(total / daysIn(sel)))}</p><p>${fmt(total)} ${sel.length === 1 && isPartial(sel[0]) ? `from Jan 1 to ${throughLabel()}` : `over ${sel.length} year${sel.length !== 1 ? "s" : ""}`}</p></div>
       <div class="metric">${second}</div>
       <div class="metric"><p>Busiest hour</p><p>${total ? fmtHour(peakHour) : "–"}</p><p>Across the city</p></div>
       <div class="metric">${fourth}</div>
@@ -1276,8 +1280,11 @@ function renderAbout() {
     : full ? `Per year, ${full}` : "Incidents per year";
 }
 
-function showError(message) {
-  $("status").innerHTML = `<div>${message}</div>`;
+// Visitors get a plain message and a way to retry; the steps for whoever runs the site go to the console
+function showError(devHint) {
+  console.error(`VanScene: ${devHint}`);
+  $("status").innerHTML = `<div><p>Couldn't load the crime data.</p><p class="hint">Check your connection, then try again.</p>
+    <button type="button" class="btn" style="margin-top:12px" onclick="location.reload()">Reload</button></div>`;
   $("status").classList.add("show");
 }
 
@@ -1332,7 +1339,7 @@ function pointRows(c) {
 
 async function start() {
   if (location.protocol === "file:") {
-    showError(`This page needs a local web server to load its data. In a terminal, go to the <code>web</code> folder and run <code>python -m http.server 8000</code>, then open <code>http://localhost:8000</code>.`);
+    showError("this page needs a local web server to load its data. In a terminal, go to the web folder and run python -m http.server 8000, then open http://localhost:8000.");
     return;
   }
   try {
@@ -1341,11 +1348,11 @@ async function start() {
     state.data = await res.json();
     if (state.data.version >= 3) state.data.points = pointRows(state.data.points);
   } catch (err) {
-    showError(`Couldn't load <code>${CONFIG.dataUrl}</code>. Run <code>python scripts/prepare_data.py</code> from the project folder to create it, then reload this page.`);
+    showError(`couldn't load ${CONFIG.dataUrl} (${err.message}). Run python scripts/prepare_data.py from the project folder to create it, then reload this page.`);
     return;
   }
   if (!Array.isArray(state.data.years)) {
-    showError(`This <code>data.json</code> was made by the old script. Run <code>python scripts/prepare_data.py</code> from version 2, then reload this page.`);
+    showError("this data.json was made by the old script. Run python scripts/prepare_data.py from version 2, then reload this page.");
     return;
   }
   $("status").classList.remove("show");
