@@ -77,7 +77,8 @@ const map = L.map("map", {
   // didn't quite fit at the next level, and made each scroll a jarring jump
   zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 100,
 }).setView(CONFIG.center, CONFIG.zoom);
-map.setMaxBounds([[49.15, -123.35], [49.36, -122.95]]);
+// Keeps people near Vancouver, with room to slide any part of the city out from behind the side panels
+map.setMaxBounds([[49.10, -123.55], [49.40, -122.70]]);
 L.control.zoom({ position: "bottomright" }).addTo(map);
 
 // OpenStreetMap tiles, greyed out with CSS (see --tile-filter) so the heat colours stand out
@@ -487,8 +488,13 @@ function drawTrackBars() {
   return hours;
 }
 function syncTimeButtons() {
+  $("time").classList.toggle("any", !state.hours);
   for (const btn of document.querySelectorAll("#time button[data-time]")) {
-    if (btn.dataset.time === "any") { btn.hidden = !state.hours; continue; }   // "Clear" only once the day is narrowed down
+    if (btn.dataset.time === "any") {   // says the whole day is in; becomes "Clear" once the day is narrowed down
+      btn.textContent = state.hours ? "Clear" : "All 24 hours";
+      btn.disabled = !state.hours;
+      continue;
+    }
     // Any time is the whole day, so all four parts show as picked (like every year under "All years")
     const hs = blockHours(btn.dataset.time), n = state.hours ? hs.filter((h) => state.hours.has(h)).length : hs.length;
     btn.setAttribute("aria-pressed", n === hs.length ? "true" : n ? "mixed" : "false");
@@ -876,10 +882,18 @@ function renderCompare() {
     if (!s) return `<button type="button" class="cmp empty${placing ? " placing" : ""}" data-action="slot-${slot.toLowerCase()}">
       <span><b style="color:${colour}">${slot}</b> · ${placing ? `Click the map to place area ${slot}` : `Pick ${slot}, then click the map`}</span></button>`;
     return `<div class="cmp${placing ? " placing" : ""}"><p class="who"><b style="background:${colour}">${slot}</b>Near ${s.name}</p>
-      <div><p class="big" data-count="${s.now}" data-key="${slot}">${fmt(s.now)}</p>${s.change ? `<span class="pill ${s.change.cls}">${s.change.text}</span>` : ""}
-        <p class="hint">Busiest per hour: ${busiestShort(s.buckets)}</p></div>
-      <div><p class="sec">Most common</p>${state.type === "all" ? typeBars(s.top, 3) : timeTiles(s.buckets)}</div></div>`;
+      <p class="big" data-count="${s.now}" data-key="${slot}">${fmt(s.now)}</p>${s.change ? `<span class="pill ${s.change.cls}">${s.change.text}</span>` : ""}
+      <p class="hint">Busiest per hour: ${busiestShort(s.buckets)}</p></div>`;
   };
+  // Head to head: one row per crime type (the top three of each area) or per part of the day, A and B side by side,
+  // each with its share of that area's reports so a quiet and a busy area can still be compared
+  const cell = (s, n) => (s ? `<span class="n">${fmt(n)} <small>${s.now ? Math.round((n / s.now) * 100) : 0}%</small></span>` : `<span class="n">–</span>`);
+  const countOf = (s, t) => s?.top.find(([x]) => x === t)?.[1] || 0;
+  const rows = state.type === "all"
+    ? [...new Set([...(A?.top || []).slice(0, 3), ...(B?.top || []).slice(0, 3)].map(([t]) => t))].map((t) => [t, countOf(A, t), countOf(B, t)])
+    : Object.keys(IN_BUCKET).map((k) => [cap(k), A?.buckets[k] || 0, B?.buckets[k] || 0]);
+  const table = A || B ? `<div class="h2h"><p class="sec">${state.type === "all" ? "Most common" : "By time of day"}</p><b>A</b><b>B</b>
+    ${rows.map(([t, a, b]) => `<span>${t}</span>${cell(A, a)}${cell(B, b)}`).join("")}</div>` : "";
   let insight = "";
   if (A && B && (A.now || B.now)) {
     const [hi, lo, hiN, loN] = A.now >= B.now ? [A, B, "A", "B"] : [B, A, "B", "A"];
@@ -911,7 +925,7 @@ function renderCompare() {
         <div class="slot-pick" role="group" aria-label="Which area a map click places"><span>Place</span>
           <button type="button" class="ab a" data-action="slot-a" aria-pressed="${state.nextSlot === "a"}">A</button><button type="button" class="ab b" data-action="slot-b" aria-pressed="${state.nextSlot === "b"}">B</button></div>
         <button type="button" class="btn" data-action="swap">Swap</button><button type="button" class="btn" data-action="reset">Clear</button></div></div>
-    ${noYears() ? pickYear : `<div class="cmp-grid">${card(A, "A")}${card(B, "B")}</div>${insight}`}`;
+    ${noYears() ? pickYear : `<div class="cmp-grid">${card(A, "A")}${card(B, "B")}</div>${table}${insight}`}`;
 }
 
 // ---------------------------------------------------------------------
