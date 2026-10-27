@@ -4,7 +4,7 @@
 :root {
   --ink: #16242b;          /* main text */
   --muted: #566a74;        /* secondary text */
-  --faint: #82939a;        /* hints and captions */
+  --faint: #627379;        /* hints and captions: still 4.5:1 on white and on tiles */
   --line: #dbe2e5;         /* borders */
   --page: #eef2f3;         /* behind the panels */
   --surface: #ffffff;      /* panels and cards */
@@ -13,12 +13,10 @@
   --sea-soft: #e1f0f5;
   --on-sea: #ffffff;       /* text on the accent colour */
   --b: #7a4fb0;            /* area B in Compare */
-  --up: #a8341d;   --up-soft: #fbeae5;     /* "up from last year" */
-  --down: #23744a; --down-soft: #e3f3ea;   /* "down from last year" */
   --bar-bg: #e9eef0;
-  --heat-1: #fde68a; --heat-2: #f59e0b; --heat-3: #e4572e;
-  /* Heat map colours, fewest to most: on a light map "more" gets darker, on a dark map it gets brighter */
-  --ramp-1: #fde68a; --ramp-2: #fbbf24; --ramp-3: #f97316; --ramp-4: #dc2626; --ramp-5: #7f1d1d;
+  /* Heat map colours, fewest to most: on a light map "more" gets darker, on a dark map it gets brighter.
+     Pale amber to deep plum (the dark theme's magma ramp run the other way), so busy reads as dense, not as danger red */
+  --ramp-1: #fde3a7; --ramp-2: #f7ad6a; --ramp-3: #d9607e; --ramp-4: #92307f; --ramp-5: #45125e;
   --heat-blend: multiply;  /* lets street names show through the heat */
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
   --map-bg: #e8ecee;
@@ -31,10 +29,9 @@
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 :root[data-theme="dark"] {
-  --ink: #e4ecef; --muted: #a0b2b9; --faint: #74868d; --line: #2b3a41;
+  --ink: #e4ecef; --muted: #a0b2b9; --faint: #8a9ca3; --line: #2b3a41;
   --page: #0e161a; --surface: #172227; --surface-2: #1f2c32;
   --sea: #4fb6d8; --sea-soft: #15343f; --on-sea: #06212b; --b: #b893ec;
-  --up: #f2907a; --up-soft: #3b1f17; --down: #72d29c; --down-soft: #14301f;
   --bar-bg: #24333a; --map-bg: #1b2327;
   --status-bg: rgba(14, 22, 26, 0.92);
   --tile-filter: grayscale(1) invert(1) brightness(0.9) contrast(0.85);
@@ -48,15 +45,20 @@ html { height: 100%; }
 body { margin: 0; height: 100%; display: flex; flex-direction: column; font: 15px/1.45 var(--font); color: var(--ink); background: var(--page); }
 button, input, select { font: inherit; color: inherit; }
 h1, h2, h3, p { margin: 0; }
+p { text-wrap: pretty; }   /* no one-word last lines */
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.place:focus { outline: none; }   /* focused by script after a pick, to move screen readers there; not a control */
 a { color: var(--sea); }
 :focus-visible { outline: 3px solid var(--sea); outline-offset: 2px; }
 
 /* ---------------- Site header ---------------- */
 .site-head { flex: none; height: 58px; display: flex; align-items: center; gap: 14px; padding: 0 18px; background: var(--surface); border-bottom: 1px solid var(--line); position: relative; z-index: 20; }
-/* The V in the app's accent; the hotspot in its point runs up the heat map's own colours and back */
-.mark { flex: none; width: 32px; height: 32px; }
-.mark svg { display: block; width: 100%; height: 100%; }
-.mark .v { fill: var(--sea); }
+/* The wordmark: the V is drawn, sized to the font's capitals and sat on its baseline, so it reads as the first letter.
+   It's in the text colour, so the hotspot in its point (which runs up the heat map's colours and back) is the only colour */
+.wordmark { display: inline-flex; align-items: baseline; }
+.mark { flex: none; width: 0.74em; height: 0.72em; margin-right: -0.06em; transform: translateY(0.03em); }
+/* negative margin kerns "Va" the way the font would; the point dips just below the baseline, as pointed letters do */
+.mark .v { fill: var(--ink); }
 .mark .spot { fill: var(--ramp-3); transform-box: fill-box; transform-origin: center; animation: heat-up 4s ease-in-out infinite; }
 /* Holds cool, warms to the hottest colour as it swells a little, then cools back */
 @keyframes heat-up {
@@ -90,32 +92,32 @@ a { color: var(--sea); }
 /* Lift the zoom buttons off the bottom-right corner: the host (Netlify) can float a badge there over the page,
    which covered them. The map's credit line stays at the very bottom. */
 #map .leaflet-bottom.leaflet-right .leaflet-control-zoom { margin-bottom: 60px; }
-/* Compare's panel runs along the bottom and Trends' down the right, so the zoom buttons move to open map there
+/* Compare's and Trends' panels run down the right, so the zoom buttons move beside them
    (wider screens only: on phones the zoom buttons are hidden and these panels are bottom sheets) */
 @media (min-width: 761px) {
-  .app[data-view="compare"] #map .leaflet-bottom.leaflet-right { bottom: auto; top: 16px; }
-  .app[data-view="compare"] #map .leaflet-bottom.leaflet-right .leaflet-control-zoom { margin-bottom: 10px; }
-  .app[data-view="trends"] #map .leaflet-bottom.leaflet-right { right: 436px; }   /* the Trends panel: 420px + 16px gutter */
+  .app:is([data-view="trends"], [data-view="compare"]) #map .leaflet-bottom.leaflet-right { right: 436px; }   /* the 420px panel + 16px gutter */
   .app[data-view="map"]:has(.area:not(:empty)) #map .leaflet-bottom.leaflet-right { right: 360px; }   /* an open area card: 344px + 16px */
 }
 @media (min-width: 761px) and (max-width: 1150px) {
-  .app[data-view="trends"] #map .leaflet-bottom.leaflet-right { right: 356px; }   /* the slimmer 340px Trends panel */
+  .app:is([data-view="trends"], [data-view="compare"]) #map .leaflet-bottom.leaflet-right { right: 356px; }   /* the slimmer 340px panels */
   .app[data-view="map"]:has(.area:not(:empty)) #map .leaflet-bottom.leaflet-right { right: 316px; }   /* the slimmer 300px area card */
 }
+/* A thin white halo round the area circles on the light map, so B's purple still reads over the plum end of the heat
+   (the dark map's heat is bright where it's busy, so its circles don't need one) */
+:root:not([data-theme="dark"]) #map .leaflet-overlay-pane path { filter: drop-shadow(0 0 1px #fff) drop-shadow(0 0 1px #fff); }
 /* Area A's and B's colour, for the map handles and the "Place A | B" toggle */
 .ab-a, .slot-pick .ab.a { --slot: var(--sea); }
 .ab-b, .slot-pick .ab.b { --slot: var(--b); }
 /* The A and B handles at the centre of each Compare circle: drag one to move that area */
 #map .ab-handle { display: grid; place-items: center; border-radius: 50%; font-weight: 700; font-size: 0.85rem; cursor: grab;
-  color: var(--on-sea); border: 2px solid var(--surface); transition: box-shadow 0.2s, transform 0.12s; }
-#map .ab-handle { background: var(--slot); }
+  color: var(--on-sea); background: var(--slot); border: 2px solid var(--surface); transition: box-shadow 0.2s, transform 0.12s; }
 #map .ab-handle.placing { box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--slot); }   /* a ring on the handle a click will move */
 #map .ab-handle.leaflet-drag-target, #map .ab-handle:active { cursor: grabbing; transform: scale(1.1); }
 
 .panel { position: absolute; z-index: 10; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; }
 .filters { top: 16px; left: 16px; max-height: calc(100% - 32px); width: 312px; padding: 18px; display: flex; flex-direction: column; gap: 18px; overflow-y: auto; }
 .area { top: 16px; right: 16px; width: 344px; max-height: calc(100% - 80px); overflow-y: auto; padding: 18px; display: none; }   /* ends 64px up, like Compare and Trends, clear of a host badge */
-.compare { left: 344px; right: 16px; bottom: 64px; max-height: 52%; overflow-y: auto; padding: 16px 18px; display: none; }
+.compare { top: 16px; right: 16px; width: 420px; max-height: calc(100% - 80px); overflow-y: auto; padding: 16px 18px; display: none; }   /* a column on the right, like Trends, so the map stays open */
 .trends { top: 16px; right: 16px; bottom: 64px; width: 420px; overflow-y: auto; padding: 18px; display: none; }
 .app[data-view="map"] .area, .app[data-view="compare"] .compare, .app[data-view="trends"] .trends { display: block; }
 .app[data-view="map"] .area:empty { display: none; }
@@ -123,12 +125,12 @@ a { color: var(--sea); }
 
 /* ---------------- Filters panel ---------------- */
 .filters-top { display: none; gap: 8px; }   /* only used on phones (search and Filters button) */
-.search { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; }
+.search { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; }
 .search:focus-within { border-color: var(--sea); }
+.search input::placeholder { color: var(--faint); opacity: 1; }   /* the browser's own grey was 3.1:1 on dark */
 .search svg { flex: none; width: 17px; height: 17px; color: var(--faint); }
 .search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font-size: 0.95rem; }
 /* The neighbourhood suggestions: always directly under the search box. It floats, so it is the one thing with a shadow. */
-.search { position: relative; }
 .suggest { position: absolute; z-index: 40; top: calc(100% + 6px); left: -1px; right: -1px; margin: 0; padding: 4px; list-style: none;
   max-height: min(320px, 60vh); overflow-y: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18); }
@@ -136,7 +138,7 @@ a { color: var(--sea); }
 .suggest li:hover, .suggest li[aria-selected="true"] { background: var(--surface-2); }
 .filters-btn { display: none; }
 .filters-body { display: flex; flex-direction: column; gap: 18px; }
-label.lab, .lab { display: block; font-weight: 700; font-size: 0.85rem; margin-bottom: 7px; }
+.lab { display: block; font-weight: 700; font-size: 0.85rem; margin-bottom: 7px; }
 fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 legend { padding: 0; }
 select { width: 100%; height: 40px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 0 10px; }
@@ -148,6 +150,9 @@ select { width: 100%; height: 40px; background: var(--surface); border: 1px soli
 .year-pick button:disabled { color: var(--faint); opacity: 0.5; cursor: not-allowed; text-decoration: line-through; }
 .year-pick button[aria-pressed="true"] { background: var(--bar-bg); color: var(--ink); font-weight: 700; }
 .year-pick button.all[aria-pressed="true"] { background: transparent; color: var(--muted); font-weight: 400; cursor: default; }
+/* Everything included ("All years", "All 24 hours"): each choice reads as in, without looking picked */
+.year-pick.all-in button[data-year]:not(.all):not([data-year="none"]):not(:disabled), .day-track.any > button:not(.all) {
+  background: var(--surface-2); color: var(--ink); }   /* a lighter fill than picked, and not bold */
 /* Time of day as a 24-hour track from 6 am round to 6 am: four equal six-hour parts, a faint chart of when
    reports happen (for the current filters) under them, then the hours */
 .day-track { position: relative; display: grid; grid-template-columns: repeat(4, 1fr); column-gap: 3px; row-gap: 4px; }
@@ -158,7 +163,9 @@ select { width: 100%; height: 40px; background: var(--surface); border: 1px soli
 .day-track > button[aria-pressed="mixed"]:not(.all) { background: var(--bar-bg); color: var(--ink); box-shadow: inset 0 -2px 0 var(--sea); }   /* some of its hours */
 .day-track .all { position: absolute; bottom: calc(100% + 4px); right: 0; padding: 2px 6px; border: 0; background: transparent; cursor: pointer;
   font-size: 0.8125rem; color: var(--sea); }
-.day-track .all:hover { text-decoration: underline; }
+.day-track .all:not(:disabled):hover { text-decoration: underline; }
+.day-track .all:disabled { color: var(--muted); cursor: default; }   /* "All 24 hours": a note, not a link */
+.day-track.any .track-bars .hr i { background: color-mix(in srgb, var(--sea) 45%, transparent); }   /* any time: every hour is in, a softer accent than picked hours */
 /* Each hour is a button the full height of the strip, so even a short bar is easy to hit; drag across them to paint */
 .track-bars { grid-column: 1 / -1; display: flex; align-items: stretch; gap: 1px; height: 28px; touch-action: none; user-select: none; }
 .track-bars .hr { flex: 1; display: flex; align-items: flex-end; padding: 0; border: 0; background: transparent; cursor: pointer; border-radius: 2px; }
@@ -178,6 +185,7 @@ select { width: 100%; height: 40px; background: var(--surface); border: 1px soli
 .citywide .share { display: block; margin-top: 6px; color: var(--ink); }
 .legend .ramp { height: 9px; /* taste-skill-ignore: the legend swatch is the heat map's own colour ramp */ border-radius: 5px; background: linear-gradient(90deg, var(--ramp-1), var(--ramp-2), var(--ramp-3), var(--ramp-4), var(--ramp-5)); }
 .legend .ends { display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--faint); margin-top: 3px; }
+.legend-note { font-size: 0.78rem; color: var(--muted); margin-top: 6px; }
 .legend .lab { font-weight: 400; color: var(--muted); font-size: 0.8rem; }
 details.about { font-size: 0.8125rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 12px; }
 details.about summary { cursor: pointer; font-weight: 700; color: var(--ink); font-size: 0.82rem; }
@@ -188,23 +196,32 @@ details.about p { margin-top: 8px; }
 .when { font-size: 0.82rem; color: var(--muted); margin: 2px 0 12px; }
 .big { font-size: 2.6rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
 .big-label { font-size: 0.85rem; color: var(--muted); margin-top: 4px; }
+.context { font-size: 0.85rem; color: var(--muted); margin-top: 8px; }
+.context b { color: var(--ink); }
 .pill { display: inline-flex; align-items: center; gap: 4px; font-size: 0.8rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; margin-top: 10px; background: var(--surface-2); color: var(--muted); }
-.pill.up { background: var(--up-soft); color: var(--up); }
-.pill.down { background: var(--down-soft); color: var(--down); }
-.sec { font-size: 0.82rem; font-weight: 700; margin: 18px 0 8px; }
-.bars { display: grid; grid-template-columns: minmax(0, 120px) 1fr 52px; gap: 7px 10px; align-items: center; font-size: 0.84rem; }
+/* Up and down keep their arrows but stay neutral: a change in reports is context, not an alarm */
+.sec { font-size: 0.82rem; font-weight: 700; margin: 14px 0 8px; }
+.bars { display: grid; grid-template-columns: minmax(0, 150px) 1fr 44px; gap: 7px 10px; align-items: center; font-size: 0.84rem; }
 .bars .n { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
 .bar { height: 8px; border-radius: 4px; background: var(--bar-bg); overflow: hidden; }
-.bar span { display: block; height: 100%; border-radius: 4px; background: var(--heat-3); }
+.bar span { display: block; height: 100%; border-radius: 4px; background: var(--muted); }   /* neutral: the heat colours mean the map */
 .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-.tiles div { background: var(--surface-2); border-radius: 10px; padding: 8px 2px; text-align: center; min-width: 0; }
-.tiles div.top { background: var(--sea-soft); color: var(--sea); }
+/* Like the Time of day filter: any time, every part in; otherwise the picked parts in its grey pill and the rest faded */
+.tiles div { border-radius: 10px; padding: 8px 2px; text-align: center; min-width: 0; background: transparent; color: var(--muted); }
+.tiles.all-in div { background: var(--surface-2); color: var(--ink); }
+.tiles div.on, .tiles div.some { background: var(--bar-bg); color: var(--ink); }
+.tiles div.on p:first-child { font-weight: 700; }
+.tiles div.some { box-shadow: inset 0 -2px 0 var(--sea); }   /* some of its hours */
 .tiles p:first-child { font-size: 0.75rem; }
-.tiles p:last-child { font-size: 1.05rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.tiles p:nth-child(2) { font-size: 1.05rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.tiles .tag { font-size: 0.6875rem; color: var(--muted); }
 .spark { display: flex; align-items: flex-end; gap: 4px; height: 56px; }
 .spark i { flex: 1; min-height: 2px; border-radius: 3px 3px 0 0; background: var(--bar-bg); }
-.spark i.on { background: var(--heat-2); }
-.spark i.part.on { background: var(--heat-1); }
+.spark i.on { background: var(--sea); }   /* picked years, in the same accent as picked hours */
+/* The year in progress: a dashed outline at its full-year pace, the count so far filled in from the bottom */
+.spark i.part, .spark i.part.on, .ybars i.part, .ybars i.part.on { display: flex; align-items: flex-end; background: transparent; border: 1px dashed var(--faint); border-bottom: 0; }
+.spark i.part b, .ybars i.part b { display: block; width: 100%; background: var(--bar-bg); }
+.spark i.part.on b, .ybars i.part.on b { background: var(--sea); }
 .spark i.gap { background: transparent; border: 1px dashed var(--line); border-bottom: 0; height: 30% !important; }
 .spark-x { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--faint); margin-top: 4px; }
 .tip { margin-top: 16px; display: flex; gap: 10px; align-items: flex-start; background: var(--surface-2); border-radius: 10px; padding: 10px 12px; font-size: 0.84rem; color: var(--muted); }
@@ -213,8 +230,6 @@ details.about p { margin-top: 8px; }
 .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .x { flex: none; width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; display: grid; place-items: center; color: var(--muted); }
 .x svg { width: 15px; height: 15px; }
-.empty p { color: var(--muted); font-size: 0.9rem; }
-.empty .place { margin-bottom: 6px; }
 
 /* ---------------- Compare ---------------- */
 .cmp-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
@@ -223,13 +238,19 @@ details.about p { margin-top: 8px; }
 .cmp-actions { display: flex; align-items: center; gap: 6px; }
 .btn { border: 1px solid var(--line); background: var(--surface); border-radius: 8px; padding: 5px 12px; font-size: 0.82rem; cursor: pointer; }
 .btn:hover { border-color: var(--sea); }
-.cmp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
-.cmp { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 4px 16px; align-items: start; }
-.cmp .who { grid-column: 1 / -1; display: flex; align-items: center; gap: 8px; font-weight: 700; }
+.cmp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cmp { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: grid; gap: 4px; align-content: start; justify-items: start; }
+.cmp .who { display: flex; align-items: flex-start; gap: 8px; font-weight: 700; font-size: 0.9rem; line-height: 1.3; }
 .cmp .who b { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; color: var(--on-sea); font-size: 0.75rem; }
-.cmp .who small { font-weight: 400; color: var(--muted); }
-.cmp .big { font-size: 2rem; margin-top: 6px; }
-.cmp .sec { margin-top: 6px; }
+.cmp .big { font-size: 1.6rem; }
+.cmp .pill { margin-top: 0; font-size: 0.75rem; padding: 2px 8px; }
+/* A and B side by side, one row per crime type or part of the day */
+.h2h { display: grid; grid-template-columns: minmax(0, 1fr) 84px 84px; gap: 5px 10px; margin-top: 12px; font-size: 0.84rem; align-items: baseline; }
+.h2h .sec { margin: 0; }
+.h2h > b { text-align: right; font-size: 0.75rem; color: var(--muted); }
+.h2h .n { text-align: right; font-variant-numeric: tabular-nums; }
+.h2h small { color: var(--muted); font-size: 0.75rem; }
+.compare .tip { margin-top: 12px; }
 .cmp.empty { display: flex; align-items: center; justify-content: center; min-height: 120px; border-style: dashed; color: var(--muted); text-align: center; }
 button.cmp.empty { width: 100%; background: transparent; cursor: pointer; font: inherit; }
 button.cmp.empty:hover { border-color: var(--muted); }
@@ -252,22 +273,23 @@ button.cmp.empty:hover { border-color: var(--muted); }
 .metric p:first-child { font-size: 0.8rem; color: var(--muted); }
 .metric p:nth-child(2) { font-size: 1.45rem; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; line-height: 1.25; }
 .metric p:nth-child(3) { font-size: 0.8rem; color: var(--faint); }
-.metric .up { color: var(--up); } .metric .down { color: var(--down); }
+.metric .up, .metric .down { color: var(--ink); }   /* neutral, like the change pills */
 .tsec { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 14px; }
 .tsec h3 { font-size: 0.88rem; font-weight: 700; margin-bottom: 10px; }
 .ybars { display: flex; align-items: flex-end; gap: 5px; height: 120px; }
 .ybars div { flex: 1; height: 100%; display: flex; flex-direction: column; justify-content: flex-end; align-items: center; gap: 4px; }
 .ybars i { width: 100%; min-height: 2px; border-radius: 4px 4px 0 0; background: var(--bar-bg); }
-.ybars i.on { background: var(--heat-2); }
-.ybars i.on.part { background: var(--heat-1); }
+.ybars i.on { background: var(--sea); }
 .ybars i.gap { background: transparent; border: 1px dashed var(--line); border-bottom: 0; }
 .ybars span { font-size: 0.75rem; color: var(--faint); }
 .hbars { display: flex; align-items: flex-end; gap: 2px; height: 70px; }
 .hbars i { flex: 1; min-height: 2px; border-radius: 2px 2px 0 0; background: var(--sea); opacity: 0.85; }
-/* The area card's smaller hour strip: grey bars, the busiest period's hours in the accent */
-.hbars-sm { height: 44px; margin-top: 10px; }
+/* The area card's smaller hour strip, like the filter's hour bars: picked hours in the accent, the rest grey,
+   and every hour in a softer accent for any time */
+.hbars-sm { height: 38px; margin-top: 8px; }
 .hbars-sm i { background: var(--bar-bg); opacity: 1; }
 .hbars-sm i.on { background: var(--sea); }
+.hbars-sm.all-in i { background: color-mix(in srgb, var(--sea) 45%, transparent); }
 .hbars-x { display: flex; justify-content: space-between; font-size: 0.75rem; color: var(--faint); margin-top: 4px; }
 
 .status { position: absolute; inset: 0; z-index: 30; display: grid; place-items: center; background: var(--status-bg); padding: 24px; text-align: center;
@@ -308,54 +330,68 @@ body, .site-head, .panel, select, .search { transition: background-color 0.3s, c
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-delay: 0ms !important; transition-duration: 0.01ms !important; }
 }
 .status div { max-width: 46ch; }
-.status code { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
 
 /* Medium screens: slimmer panels */
 @media (max-width: 1150px) {
   .filters { width: 288px; }
-  .toast { left: calc(50% - 6px); max-width: max(240px, calc(100% - 652px)); }   /* slimmer panels: 320px left, 332px right */
+  .toast { left: calc(50% - 18px); max-width: max(240px, calc(100% - 688px)); }   /* slimmer panels: 320px left, 356px right */
   .views button { padding: 6px 9px; }   /* leaves the header search room for its placeholder */
   .area { width: 300px; }
-  .compare { left: 320px; }
-  .trends { width: 340px; }
-  .cmp { grid-template-columns: 1fr; }
+  .compare, .trends { width: 340px; }
 }
 
 /* ---------------- Phones: search on top, details in a bottom sheet ---------------- */
 @media (max-width: 760px) {
   .site-head { height: 52px; padding: 0 16px; gap: 8px; }
-  .mark, .head-search { display: none; }
+  .head-search { display: none; }
   .brand h1 { font-size: 1rem; }
   .filters-top { display: flex; }
-  .views { flex: 1; justify-content: space-between; }
-  .views button { flex: 1; justify-content: center; padding: 6px 4px; }
-  .theme-toggle { width: 34px; height: 34px; }
+  /* Map, Compare and Trends in a bar along the bottom, in thumb reach; the map and sheets sit above it */
+  .brand { flex: 1; }
+  .views { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; gap: 4px; border: 0; border-top: 1px solid var(--line); border-radius: 0;
+    background: var(--surface); padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); }
+  .views button { flex: 1; flex-direction: column; justify-content: center; gap: 2px; min-height: 48px; padding: 4px; font-size: 0.78rem; }
+  .views button svg { width: 20px; height: 20px; }
+  .app { margin-bottom: calc(61px + env(safe-area-inset-bottom)); }   /* the bar's height, so nothing hides under it */
+  .theme-toggle { width: 44px; height: 44px; }
 
   .filters { top: 8px; left: 8px; right: 8px; bottom: auto; width: auto; max-height: calc(100% - 16px); padding: 10px; gap: 10px; }
-  .filters-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 0 12px; height: 42px; cursor: pointer; font-size: 0.88rem; }
+  .filters-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 0 12px; height: 44px; cursor: pointer; font-size: 0.88rem; }
   .filters-btn svg { width: 16px; height: 16px; }
   .filters-btn[aria-expanded="true"] { background: var(--sea); color: var(--on-sea); border-color: var(--sea); }
   .filters-body, details.about { display: none; }
   .filters.open { z-index: 12; }
+  /* An open Filters panel covers most of the map; hide the sheet behind it rather than let it show through */
+  .app:has(.filters.open) :is(.area, .compare, .trends) { visibility: hidden; }
   .filters:not(.open) { overflow: visible; }   /* the closed panel is one row: let the suggestions hang below it */
-  .filters.open .filters-body, .filters.open details.about { display: flex; }
+  .filters.open .filters-body { display: flex; }
   .filters.open details.about { display: block; }
-  .legend { margin-top: 0; display: flex; align-items: center; gap: 8px; }
+  /* One row: Fewer, the ramp, More */
+  .legend { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 4px 8px; }
   .legend .lab { display: none; }
-  .legend .ramp { flex: 1; height: 7px; }
-  .legend .ends { margin: 0; gap: 0; display: contents; }
+  .legend .ramp { grid-area: 1 / 2; height: 7px; }
+  .legend .ends { display: contents; }
+  .legend .ends span:first-child { grid-area: 1 / 1; }
+  .legend .ends span:last-child { grid-area: 1 / 3; }
+  .legend-note { grid-column: 1 / -1; }
 
   .area, .compare, .trends { left: 0; right: 0; bottom: 0; top: auto; width: auto; max-height: 48%; border-radius: 18px 18px 0 0; border-bottom: 0; padding: 4px 16px 18px; }
-  .sheet-handle { display: block; width: 100%; height: 22px; border: 0; background: transparent; cursor: pointer; position: sticky; top: 0; z-index: 1; }
-  .sheet-handle::before { content: ""; display: block; width: 40px; height: 4px; border-radius: 2px; background: var(--line); margin: 6px auto 0; }
-  .panel.collapsed { max-height: 92px; overflow: hidden; }
+  .sheet-handle { display: block; width: 100%; height: 32px; border: 0; background: transparent; cursor: pointer; position: sticky; top: 0; z-index: 1; }
+  .sheet-handle::before { content: ""; display: block; width: 40px; height: 4px; border-radius: 2px; background: var(--faint); margin: 10px auto 0; }
+  .panel.collapsed { max-height: 102px; overflow: hidden; }
   .big { font-size: 2.2rem; }
-  .cmp-grid { gap: 8px; }
-  .cmp { display: block; padding: 10px; }
-  .cmp .big { font-size: 1.6rem; }
-  .cmp .bars { grid-template-columns: 1fr 34px; font-size: 0.78rem; }
-  .cmp .bars .bar { display: none; }
+  .cmp-grid { gap: 8px; }   /* still side by side in the bottom sheet */
+  .cmp { padding: 10px; }
+  .h2h { grid-template-columns: minmax(0, 1fr) 76px 76px; font-size: 0.8rem; }
   #map .leaflet-control-zoom { display: none; }
-  #map .leaflet-bottom.leaflet-right { bottom: auto; top: 96px; }
-  .toast { top: 128px; left: 50%; max-width: calc(100% - 32px); }   /* below the search row, clear of the bottom sheet */
+  #map .leaflet-bottom.leaflet-right { bottom: auto; top: 108px; }   /* just clear of the search panel, which ends 103px down */
+  .toast { top: 136px; left: 50%; max-width: calc(100% - 32px); }   /* below the search row, clear of the bottom sheet */
+}
+
+/* Touch screens, any size: the small filter controls get 44px tap heights */
+@media (pointer: coarse) {
+  .year-pick button { min-height: 44px; }
+  .day-track > button:not(.all) { min-height: 44px; }
+  .day-track .all { padding: 12px 6px; bottom: calc(100% - 8px); }   /* a bigger hit area without moving the text */
+  .track-bars { height: 44px; }   /* each hour is ~14px wide, so make it tall; dragging across them also works */
 }

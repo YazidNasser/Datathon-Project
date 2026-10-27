@@ -14,7 +14,7 @@ const CONFIG = {
   defaultTime: "any",   // "any", "morning", "afternoon", "evening" or "overnight" (more can be picked in the app)
   heatStrength: 1,      // higher = more of the city lights up; lower = only the strongest hotspots show
   heatFloor: 0.05,      // faintest a reported spot can be: 0 = quiet areas fully see-through
-  hotspotLevel: 0.95,   // how busy a spot must be to show as dark red: 0.95 = the busiest 5% of the map
+  hotspotLevel: 0.99,   // how busy a spot must be to show in the top colour: 0.99 = the busiest 1% of the map
   minForChange: 10,     // don't show a % change when the previous year had fewer incidents than this
 };
 
@@ -53,12 +53,18 @@ const state = {
   selected: null,               // the spot clicked in Map view
   a: null, b: null, nextSlot: "a",   // the two spots in Compare view
   shown: null, compare: null,   // which incidents are on the map, and which they're compared with
+  city: null,                   // city-wide totals for the current filters (see updateHeat)
 };
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => n.toLocaleString("en-CA");
 const fmtHour = (h) => `${h % 12 || 12} ${h < 12 ? "am" : "pm"}`;
 const listJoin = (xs) => (xs.length < 2 ? xs.join("") : `${xs.slice(0, -1).join(", ")} and ${xs[xs.length - 1]}`);
 const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+const sum = (xs) => xs.reduce((a, b) => a + b, 0);
+const bump = (counts, key) => counts.set(key, (counts.get(key) || 0) + 1);   // add one to a Map of counts
+// Crime type counts as [typeIndex, count], most first (ties by type order)
+const ranked = (types) => [...types.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]);
+const isDark = () => document.documentElement.getAttribute("data-theme") === "dark";
 const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 const phoneQuery = window.matchMedia("(max-width: 760px)");   // matches the phone layout in styles.css
 const isPhone = () => phoneQuery.matches;
@@ -77,7 +83,8 @@ const map = L.map("map", {
   // didn't quite fit at the next level, and made each scroll a jarring jump
   zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 100,
 }).setView(CONFIG.center, CONFIG.zoom);
-map.setMaxBounds([[49.15, -123.35], [49.36, -122.95]]);
+// Keeps people near Vancouver, with room to slide any part of the city out from behind the side panels
+map.setMaxBounds([[49.10, -123.55], [49.40, -122.70]]);
 L.control.zoom({ position: "bottomright" }).addTo(map);
 
 // OpenStreetMap tiles, greyed out with CSS (see --tile-filter) so the heat colours stand out
@@ -169,7 +176,8 @@ function addCoverageMask(points) {
     }
   }
 
-  coverage = { field, rows, cols, idx, SW, NE, dLat, dLng };
+  const km2 = field.filter((v) => v <= 0.5).length * (SHADE.cellMeters / 1000) ** 2;   // the land the data covers
+  coverage = { field, rows, cols, idx, SW, NE, dLat, dLng, km2 };
   paintCoverage();
 }
 
@@ -185,7 +193,7 @@ function isOutside(ll) {
 function paintCoverage() {
   if (!coverage) return;
   const { field, rows, cols, idx, SW, NE } = coverage;
-  const colours = SHADE[document.documentElement.getAttribute("data-theme") === "dark" ? "dark" : "light"];
+  const colours = SHADE[isDark() ? "dark" : "light"];
   while (maskLayers.length) map.removeLayer(maskLayers.pop());
   // Paint at 4x the grid resolution so the curved edge stays smooth (row 0 is the south edge)
   const UP = 4, W = cols * UP, H = rows * UP;
@@ -252,7 +260,8 @@ Object.assign(L.HeatLayer.prototype, {
       if (s) { s[0] = (s[0] * s[2] + x * k) / (s[2] + k); s[1] = (s[1] * s[2] + y * k) / (s[2] + k); s[2] += k; }
       else cells.set(key, [x, y, k]);
     }
-    const data = [...cells.values()].map(([x, y, k]) => [Math.round(x), Math.round(y), Math.min(k, max)]);
+    // Square root: the busiest cells are many times the rest, so on a straight scale downtown saturated into one blob
+    const data = [...cells.values()].map(([x, y, k]) => [Math.round(x), Math.round(y), Math.min(Math.sqrt(k), max)]);
     this._heat.data(data).draw(this.options.minOpacity);
   },
   _animateZoom(e) {   // the same arithmetic as Leaflet's padded renderers, with a top-left transform origin
@@ -337,11 +346,21 @@ function growCircle(c) {
 const latestMd = () => { const [, m, d] = state.data.latestDate.split("-").map(Number); return m * 100 + d; };
 const throughLabel = () => { const md = latestMd(); return `${MONTHS[Math.floor(md / 100) - 1]} ${md % 100}`; };
 const isPartial = (y) => y === state.data.partialYear;
+// Days covered by these years: a full year, or for the year in progress, Jan 1 to the latest report
+const daysIn = (years) => Math.max(1, years.reduce((sum, y) => sum + (isPartial(y)
+  ? Math.round((new Date(state.data.latestDate + "T12:00:00") - new Date(y, 0, 1, 12)) / 864e5) + 1
+  : new Date(y, 1, 29).getMonth() === 1 ? 366 : 365), 0));
 // Years inside the data's range that have no incidents at all (e.g. a year missing from the CSV)
 function missingYears() {
   const ys = state.data.years, out = [];
   for (let y = ys[0]; y <= ys[ys.length - 1]; y++) if (!ys.includes(y)) out.push(y);
   return out;
+}
+// Every year from the first to the last in the data, oldest first, missing years included
+function yearSpan() {
+  const ys = state.data.years, span = [];
+  for (let y = ys[0]; y <= ys[ys.length - 1]; y++) span.push(y);
+  return span;
 }
 const selectedYears = () => state.data.years.filter((y) => state.years.has(y));   // oldest first
 const allSelected = () => state.years.size === state.data.years.length;
@@ -389,7 +408,7 @@ function compareName() {
   return isPartial(y) ? `the same dates in ${y - 1}` : String(y - 1);
 }
 const typeLabel = () => (state.type === "all" ? "All types" : state.data.types[state.type].label);
-const filterLine = () => `${state.type === "all" ? "All types" : typeLabel()}, ${timeLabel()}`;
+const filterLine = () => `${typeLabel()}, ${timeLabel()}`;
 
 // Up / down / about the same, compared with the year before
 function changeInfo(now, before) {
@@ -431,7 +450,7 @@ function timeLabel() {
 
 // Reports per part of the day, from reports per clock hour
 const partCounts = (hours) => Object.fromEntries(Object.keys(IN_BUCKET).map((k) => [k, blockHours(k).reduce((s, h) => s + hours[h], 0)]));
-const periodTotal = (buckets) => Object.values(buckets).reduce((a, b) => a + b, 0);
+const periodTotal = (buckets) => sum(Object.values(buckets));
 // "Busiest" compares incidents per hour. With four equal six-hour parts that's the same as comparing counts,
 // but keeping it per hour means the rule stays right if the parts ever change length.
 const MIN_FOR_BUSIEST = 20;   // too few incidents with a known time and any "busiest" is mostly chance
@@ -444,10 +463,14 @@ function busiestTime(buckets) {
     .sort((a, b) => b[1] - a[1]);
   return first[1] >= second[1] * CLEAR_LEAD ? first[0] : null;
 }
+// The parts of the day as tiles, styled like the Time of day filter: the picked parts in its grey pill, a part with
+// only some hours picked underlined, the rest faded. The busiest part says so in words, not in the "picked" colour.
 function timeTiles(buckets) {
   const top = busiestTime(buckets);
-  return `<div class="tiles">${Object.keys(IN_BUCKET).map((k) =>
-    `<div class="${k === top ? "top" : ""}"><p>${cap(k)}</p><p>${fmt(buckets[k])}</p></div>`).join("")}</div>`;
+  return `<div class="tiles${state.hours ? "" : " all-in"}">${Object.keys(IN_BUCKET).map((k) => {
+    const n = state.hours ? blockHours(k).filter((h) => state.hours.has(h)).length : 0;
+    return `<div class="${n === 6 ? "on" : n ? "some" : ""}"><p>${cap(k)}</p><p>${fmt(buckets[k])}</p>${k === top ? `<p class="tag">Busiest</p>` : ""}</div>`;
+  }).join("")}</div>`;
 }
 // One line that makes the per-hour comparison readable without new units
 function busiestLine(buckets) {
@@ -462,12 +485,23 @@ function busiestShort(buckets) {
   if (!total) return "–";
   return top ?? (total < MIN_FOR_BUSIEST ? "too few to tell" : "no clear peak");
 }
-// The area card's bar per hour; the busiest part's hours in the accent colour
-function hourStrip(hours, buckets) {
-  const max = Math.max(1, ...hours), top = busiestTime(buckets);
-  return `<div class="hbars hbars-sm">${TRACK_ORDER.map((h, i) =>
-    `<i class="${top && IN_BUCKET[top](h) ? "on" : ""}" style="height:${(hours[h] / max) * 100}%;--i:${i}" title="${fmtHour(h)}: ${fmt(hours[h])}"></i>`).join("")}</div>
-    <div class="hbars-x"><span>6 am</span><span>12 pm</span><span>6 pm</span><span>12 am</span><span>6 am</span></div>`;
+// One sentence a screen reader reads in place of an hour chart (its bars are pictures)
+function hourSummary(hours, what) {
+  const total = sum(hours);
+  if (!total) return `${what} by hour of the day: none with a known time.`;
+  const peak = hours.indexOf(Math.max(...hours)), low = hours.indexOf(Math.min(...hours));
+  return `${what} by hour of the day: busiest at ${fmtHour(peak)} with ${fmt(hours[peak])}, quietest at ${fmtHour(low)} with ${fmt(hours[low])}.`;
+}
+const attr = (t) => t.replace(/"/g, "&quot;");
+// The labels under an hour chart, which runs from 6 am round to 6 am like the track
+const HOUR_AXIS = `<div class="hbars-x"><span>6 am</span><span>12 pm</span><span>6 pm</span><span>12 am</span><span>6 am</span></div>`;
+// The area card's bar per hour, coloured like the filter's hour bars: the picked hours in the accent, or every hour
+// in a softer accent for any time
+function hourStrip(hours) {
+  const max = Math.max(1, ...hours);
+  return `<div class="hbars hbars-sm${state.hours ? "" : " all-in"}" role="img" aria-label="${attr(hourSummary(hours, "Reports near here"))}">${TRACK_ORDER.map((h, i) =>
+    `<i class="${state.hours?.has(h) ? "on" : ""}" style="height:${(hours[h] / max) * 100}%;--i:${i}" title="${fmtHour(h)}: ${fmt(hours[h])}"></i>`).join("")}</div>
+    ${HOUR_AXIS}`;
 }
 
 // The chart inside the time-of-day track: reports per hour for the chosen years and crime type. Each bar is
@@ -477,20 +511,31 @@ function drawTrackBars() {
   for (const p of state.data.points) if (p[HOUR] >= 0 && matches(p, state.shown, { ignoreTime: true })) hours[p[HOUR]]++;
   const max = Math.max(1, ...hours), strip = $("track-bars");
   if (strip.children.length !== 24)   // made once, so later changes animate
-    strip.innerHTML = TRACK_ORDER.map((h) => `<button type="button" class="hr" data-hour="${h}" aria-label="${fmtHour(h)}"><i></i></button>`).join("");
+    strip.innerHTML = TRACK_ORDER.map((h) => `<button type="button" class="hr" data-hour="${h}"><i></i></button>`).join("");
   for (const bar of strip.children) {
     const h = Number(bar.dataset.hour);
     bar.firstChild.style.height = `${(hours[h] / max) * 100}%`;
     bar.setAttribute("aria-pressed", String(!!state.hours?.has(h)));   // blue only for hours you picked; grey for any time
     bar.title = `${fmtHour(h)}: ${fmt(hours[h])} reports`;
+    bar.setAttribute("aria-label", bar.title);
   }
+  // The summary is in the name: NVDA read the group's name on the way in but skipped a separate description
+  strip.setAttribute("aria-label", `Hours of the day. ${hourSummary(hours, "Reports city-wide")} Click or drag across them to pick hours, or use the arrow keys and Enter.`);
+  // One Tab stop for the 24 hours (the focused one, else the first picked, else 6 am); arrows move between them
+  const stop = strip.contains(document.activeElement) ? document.activeElement : strip.querySelector('[aria-pressed="true"]') || strip.firstChild;
+  for (const bar of strip.children) bar.tabIndex = bar === stop ? 0 : -1;
   return hours;
 }
 function syncTimeButtons() {
+  $("time").classList.toggle("any", !state.hours);
   for (const btn of document.querySelectorAll("#time button[data-time]")) {
-    if (btn.dataset.time === "any") { btn.hidden = !state.hours; continue; }   // "Clear" only once the day is narrowed down
-    // Any time is the whole day, so all four parts show as picked (like every year under "All years")
-    const hs = blockHours(btn.dataset.time), n = state.hours ? hs.filter((h) => state.hours.has(h)).length : hs.length;
+    if (btn.dataset.time === "any") {   // says the whole day is in; becomes "Clear" once the day is narrowed down
+      btn.textContent = state.hours ? "Clear" : "All 24 hours";
+      btn.disabled = !state.hours;
+      continue;
+    }
+    // Any time includes every part without picking one (like the years under "All years"): a tap picks just that part
+    const hs = blockHours(btn.dataset.time), n = state.hours ? hs.filter((h) => state.hours.has(h)).length : 0;
     btn.setAttribute("aria-pressed", n === hs.length ? "true" : n ? "mixed" : "false");
   }
 }
@@ -540,6 +585,15 @@ function bindTimeControls() {
     setHours(paintSet);
     refresh();
   });
+  strip.addEventListener("keydown", (e) => {
+    const bars = [...strip.children], i = bars.indexOf(document.activeElement);
+    const to = { ArrowRight: i + 1, ArrowDown: i + 1, ArrowLeft: i - 1, ArrowUp: i - 1, Home: 0, End: bars.length - 1 }[e.key];
+    if (i < 0 || to === undefined) return;
+    e.preventDefault();
+    const next = bars[(to + bars.length) % bars.length];
+    for (const b of bars) b.tabIndex = b === next ? 0 : -1;
+    next.focus();
+  });
   // Keyboard (Enter or Space on a bar) arrives as a click with no pointer
   strip.addEventListener("click", (e) => {
     const bar = e.target.closest("[data-hour]");
@@ -584,7 +638,11 @@ function spotsPerYear(test, years, scale = 1) {
 
 function updateHeat() {
   const n = state.shown.years.size;
-  const count = n ? state.data.points.filter((p) => matches(p, state.shown)).length : 0;
+  // City-wide totals for the current filters, overall and per crime type, for the area card's comparisons
+  let count = 0;
+  const cityTypes = new Map();
+  if (n) for (const p of state.data.points) if (matches(p, state.shown)) { count++; bump(cityTypes, p[TYPE]); }
+  state.city = { count, types: cityTypes };
   // A part of the day is drawn per hour (scaled up by 24 / its hours) against the all-day reference, so a part
   // exactly as busy per hour as the whole day looks like "Any time"; busier parts glow more, quieter ones less.
   const hrs = state.hours ? state.hours.size : 0;   // 0 for "Any time"
@@ -597,7 +655,7 @@ function updateHeat() {
   let share = "";
   const byHour = drawTrackBars();
   if (n && hrs && count) {
-    const known = byHour.reduce((a, b) => a + b, 0);   // reports with a known time, at any hour
+    const known = sum(byHour);   // reports with a known time, at any hour
     const rate = count / known / (hrs / 24);
     share = `<span class="share">${cap(timeLabel())}: ${Math.round((count / known) * 100)}% of reports in ${hrs} of 24 hours, ` +
       `${Math.abs(rate - 1) < 0.1 ? "about the same as the average hour" : `about ${rate.toFixed(1)}× the average hour`}.</span>`;
@@ -677,6 +735,12 @@ function fitTo(bounds, maxZoom = 14) {
   map.fitBounds(bounds, { ...panelPadding(L.latLngBounds(bounds)), maxZoom, animate: !reduceMotion });
 }
 const areaBounds = (ll) => ll.toBounds(CONFIG.radiusMeters * 3.2);
+// Move the map only if part of `bounds` is hidden behind a panel or off screen, and never zoom in to do it
+function keepInView(bounds) {
+  const o = panelPadding(bounds), size = map.getSize();
+  const seen = L.latLngBounds(map.containerPointToLatLng(o.paddingTopLeft), map.containerPointToLatLng(size.subtract(o.paddingBottomRight)));
+  if (!seen.contains(bounds)) fitTo(bounds, map.getZoom());
+}
 function fitForView() {
   if (state.view === "map" && state.selected) return fitTo(areaBounds(state.selected));
   if (state.view === "compare" && state.a && state.b) return fitTo(areaBounds(state.a).extend(areaBounds(state.b)), 15);
@@ -713,16 +777,18 @@ function areaStats(ll) {
   const types = new Map(), hours = new Array(24).fill(0), perYear = new Map();
   for (const p of local) {
     if (matches(p, state.compare)) before++;
-    if (passesFilters(p)) perYear.set(p[YEAR], (perYear.get(p[YEAR]) || 0) + 1);   // every year, for the trend
+    if (passesFilters(p)) bump(perYear, p[YEAR]);   // every year, for the trend
     if (matches(p, state.shown, { ignoreTime: true })) {                            // time of day uses all times
       if (p[HOUR] < 0) unknownHour++; else hours[p[HOUR]]++;
     }
     if (!matches(p, state.shown)) continue;
     now++;
-    types.set(p[TYPE], (types.get(p[TYPE]) || 0) + 1);
+    bump(types, p[TYPE]);
   }
-  const top = [...types.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]).map(([t, n]) => [state.data.types[t].label, n]);
-  return { name: nearestHood(ll), now, before, change: changeInfo(now, before), top, buckets: partCounts(hours), hours, unknownHour, perYear };
+  const sorted = ranked(types);
+  const top = sorted.map(([t, n]) => [state.data.types[t].label, n]);
+  return { name: nearestHood(ll), now, before, change: changeInfo(now, before), top, typeIds: sorted.map(([t]) => t),
+    buckets: partCounts(hours), hours, unknownHour, perYear, vsCity: vsCity(now) };
 }
 
 // Small HTML pieces
@@ -732,26 +798,64 @@ function typeBars(top, count = 4) {
   return `<div class="bars">${top.slice(0, count).map(([t, n], i) =>
     `<span>${t}</span><div class="bar"><span style="width:${(n / max) * 100}%;--i:${i}"></span></div><span class="n">${fmt(n)}</span>`).join("")}</div>`;
 }
-function yearSpark(perYear) {
-  const ys = state.data.years, first = ys[0], last = ys[ys.length - 1], missing = missingYears();
-  const span = []; for (let y = first; y <= last; y++) span.push(y);
-  const max = Math.max(1, ...span.map((y) => perYear.get(y) || 0));
-  return `<div class="spark">${span.map((y, i) => missing.includes(y)
-    ? `<i class="gap" title="No ${y} data"></i>`
-    : `<i class="${state.years.has(y) ? "on" : ""} ${isPartial(y) ? "part" : ""}" style="height:${((perYear.get(y) || 0) / max) * 100}%;--i:${i}" title="${y}: ${fmt(perYear.get(y) || 0)}"></i>`).join("")}</div>
-    <div class="spark-x"><span>${first}</span>${missing.length ? `<span>${missing.join(", ")} no data</span>` : ""}<span>${last}${state.data.partialYear === last ? "*" : ""}</span></div>`;
+// One year's bar. The year in progress is drawn as a dashed outline at its full-year pace (the rate so far, over
+// 365 days) with the count so far filled in at the bottom, so it doesn't read as a drop against whole years.
+const fullYearPace = (y, n) => (isPartial(y) ? n * yearWeight(y) : n);
+function yearBar(y, n, max, i) {
+  const on = state.years.has(y) ? "on" : "";
+  if (!isPartial(y)) return `<i class="${on}" style="height:${(n / max) * 100}%;--i:${i}" title="${y}: ${fmt(n)}"></i>`;
+  const pace = fullYearPace(y, n);
+  return `<i class="part ${on}" style="height:${(pace / max) * 100}%;--i:${i}" title="${y}: ${fmt(n)} to ${throughLabel()}, about ${fmt(Math.round(pace))} at this pace for the whole year"><b style="height:${pace ? (n / pace) * 100 : 0}%"></b></i>`;
 }
-function tipFor(top) {
-  if (state.type !== "all") return TIPS[typeLabel()] || "";
-  const names = top.slice(0, 3).map(([t]) => t);
-  for (const t of ["Bike theft", "Theft from cars", "Home break-ins", "Car theft"]) if (names.includes(t)) return TIPS[t];
-  return names.length ? TIPS[names[0]] || "" : "";
+// One sentence a screen reader reads in place of a year chart
+function yearSummary(span, perYear, what) {
+  const whole = span.filter((y) => !isPartial(y) && !missingYears().includes(y));
+  const n = (y) => perYear.get(y) || 0;
+  const hi = whole.reduce((a, y) => (n(y) > n(a) ? y : a), whole[0]), lo = whole.reduce((a, y) => (n(y) < n(a) ? y : a), whole[0]);
+  const p = state.data.partialYear;
+  return `${what} per year, ${span[0]} to ${span[span.length - 1]}: highest in ${hi} with ${fmt(n(hi))}, lowest in ${lo} with ${fmt(n(lo))}.` +
+    (span.includes(p) ? ` ${p} so far: ${fmt(n(p))} to ${throughLabel()}, about ${fmt(Math.round(fullYearPace(p, n(p))))} at that pace for the year.` : "");
+}
+const paceNote = () => `${state.data.partialYear} is Jan 1 to ${throughLabel()}; the dashed outline is its pace for a full year.`;
+function yearSpark(perYear) {
+  const span = yearSpan(), first = span[0], last = span[span.length - 1], missing = missingYears();
+  const max = Math.max(1, ...span.map((y) => fullYearPace(y, perYear.get(y) || 0)));
+  return `<div class="spark" role="img" aria-label="${attr(yearSummary(span, perYear, "Reports near here"))}">${span.map((y, i) => missing.includes(y)
+    ? `<i class="gap" title="No ${y} data"></i>`
+    : yearBar(y, perYear.get(y) || 0, max, i)).join("")}</div>
+    <div class="spark-x"><span>${first}</span>${missing.length ? `<span>${missing.join(", ")} no data</span>` : ""}<span>${last}</span></div>
+    ${state.data.partialYear ? `<p class="hint">${paceNote()}</p>` : ""}`;
+}
+// A tip says a crime "is common here", so only give one where that's true compared with the city: a bigger share
+// of this area's reports than of the city's, or, with one type picked, clearly more of it than an average area
+function tipFor(s) {
+  if (state.type !== "all") return s.vsCity > 1.5 ? TIPS[typeLabel()] || "" : "";
+  const city = state.city?.count;
+  const over = (i) => !!city && s.top[i][1] / s.now > (state.city.types.get(s.typeIds[i]) || 0) / city;
+  for (const t of ["Bike theft", "Theft from cars", "Home break-ins", "Car theft"]) {
+    const i = s.top.slice(0, 3).findIndex(([name]) => name === t);
+    if (i >= 0 && over(i)) return TIPS[t];
+  }
+  return s.top.length && over(0) ? TIPS[s.top[0][0]] || "" : "";
+}
+// This area against the city average for a circle of the same size (null when that can't be worked out)
+function vsCity(now) {
+  if (!coverage?.km2 || !state.city?.count) return null;
+  return now / ((state.city.count * Math.PI * (CONFIG.radiusMeters / 1000) ** 2) / coverage.km2);
+}
+function cityLine(r) {
+  if (r == null) return "";
+  const size = `for a ${CONFIG.radiusMeters} m circle`;
+  if (r > 1.5) return `<p class="context"><b>About ${r < 10 ? r.toFixed(1) : Math.round(r)}× the city average</b> ${size}. Busy areas show more because more people are there.</p>`;
+  if (r < 0.67) return `<p class="context"><b>Below the city average</b> ${size} (about ${r < 0.1 ? "a tenth" : `${r.toFixed(1)}×`}).</p>`;
+  return `<p class="context"><b>About the city average</b> ${size}.</p>`;
 }
 const blurredNote = () => {
   const blurred = state.type === "all" ? state.data.types.some((t) => t.blurred) : state.data.types[state.type].blurred;
   return blurred ? `<p class="foot">VPD spreads the locations of offences against a person across several blocks, so read those as area-level only.</p>` : "";
 };
-const handle = `<button type="button" class="sheet-handle" aria-label="Show or hide details"></button>`;
+// The grip at the top of a bottom sheet on phones (hidden on wider screens)
+const sheetHandle = `<button type="button" class="sheet-handle" aria-label="Show or hide details" aria-expanded="true"></button>`;
 // With every year unticked there's nothing to count, so panels say so instead of showing zeros
 const noYears = () => !state.shown.years.size;
 const pickYear = `<div class="tip">${ICON_INFO}<span>Pick a year in the filters to see what's been reported.</span></div>`;
@@ -802,28 +906,29 @@ function renderArea() {
   // No card until a spot is picked, so it doesn't sit over the map; the hint shows once as a note on open
   if (!state.selected) { $("area").innerHTML = ""; return; }
   if (noYears()) {
-    $("area").innerHTML = `${handle}
-      <div class="card-head"><div><p class="place">Near ${nearestHood(state.selected)}</p>
+    $("area").innerHTML = `${sheetHandle}
+      <div class="card-head"><div><h2 class="place" tabindex="-1">Near ${nearestHood(state.selected)}</h2>
         <p class="when">Within ${CONFIG.radiusMeters} m</p></div>
         <button type="button" class="x" data-action="clear" aria-label="Close area summary">${ICON_X}</button></div>${pickYear}`;
     return;
   }
   const s = areaStats(state.selected);
-  const tip = s.now ? tipFor(s.top) : "";
-  $("area").innerHTML = `${handle}
-    <div class="card-head"><div><p class="place">Near ${s.name}</p>
+  const tip = s.now ? tipFor(s) : "";
+  $("area").innerHTML = `${sheetHandle}
+    <div class="card-head"><div><h2 class="place" tabindex="-1">Near ${s.name}</h2>
       <p class="when">Within ${CONFIG.radiusMeters} m · ${periodLabel()}</p></div>
       <button type="button" class="x" data-action="clear" aria-label="Close area summary">${ICON_X}</button></div>
     <p class="big" data-count="${s.now}" data-key="area">${fmt(s.now)}</p>
     <p class="big-label">reported incidents · ${filterLine()}</p>
+    ${s.now ? cityLine(s.vsCity) : ""}
     ${s.change ? `<span class="pill ${s.change.cls}">${s.change.text}</span>` : ""}
-    ${state.type === "all" ? `<p class="sec">Most common here</p>${typeBars(s.top)}` : ""}
-    <p class="sec">When they happen</p>${timeTiles(s.buckets)}${busiestLine(s.buckets)}${periodTotal(s.buckets) ? hourStrip(s.hours, s.buckets) : ""}
+    ${state.type === "all" ? `<h3 class="sec">Most common here</h3>${typeBars(s.top)}` : ""}
+    <h3 class="sec">When they happen</h3>${timeTiles(s.buckets)}${busiestLine(s.buckets)}${periodTotal(s.buckets) ? hourStrip(s.hours) : ""}
     ${s.unknownHour ? `<p class="hint">${fmt(s.unknownHour)} with no time recorded</p>` : ""}
-    <p class="sec">Year by year</p>${yearSpark(s.perYear)}
+    <h3 class="sec">Year by year</h3>${yearSpark(s.perYear)}
     ${tip ? `<div class="tip">${ICON_BULB}<span>${tip}</span></div>` : ""}
     ${blurredNote()}
-    <p class="foot">Awareness, not a safety score. Busy areas show more because more people are there.</p>`;
+    <p class="foot">Awareness, not a safety score for any address.</p>`;
 }
 
 function selectPoint(ll) {
@@ -833,6 +938,14 @@ function selectPoint(ll) {
   growCircle(areaCircle);
   enter($("area"));
   renderPanels();
+  $("area").querySelector(".place")?.focus({ preventScroll: true });
+  announce($("area").querySelector(".place")?.textContent, $("area").querySelector(".big")?.dataset.count, $("area").querySelector(".context")?.textContent);
+}
+// One short sentence for screen readers when something is placed; the panels themselves aren't live regions,
+// so a filter change doesn't re-read a whole card
+function announce(place, count, extra = "") {
+  if (!place) return;
+  $("announce").textContent = `${place}: ${count != null ? `${fmt(Number(count))} reported incidents. ` : ""}${extra}`;
 }
 
 // ---------------------------------------------------------------------
@@ -847,6 +960,10 @@ function setCompareSpot(ll) {
   syncCircles();
   growCircle(slot === "a" ? circleA : circleB);
   renderPanels();
+  // With both placed, show both: area B could land behind the bottom sheet on a phone once its card filled in
+  if (state.a && state.b) keepInView(areaBounds(state.a).extend(areaBounds(state.b)));
+  const card = $("compare").querySelector(`[data-key="${slot.toUpperCase()}"]`);
+  announce(`Area ${slot.toUpperCase()} placed near ${nearestHood(ll)}`, card?.dataset.count);
 }
 function pickSlot(slot) {
   state.nextSlot = slot;
@@ -868,50 +985,66 @@ for (const [slot, handle, circle] of [["a", handleA, circleA], ["b", handleB, ci
   handle.on("click", () => pickSlot(slot));
 }
 
-function renderCompare() {
-  const A = state.a && areaStats(state.a), B = state.b && areaStats(state.b);
-  const card = (s, slot) => {
-    const colour = slot === "A" ? "var(--sea)" : "var(--b)", placing = state.nextSlot === slot.toLowerCase();
-    // An empty card is a button: click it to pick that area, then click the map
-    if (!s) return `<button type="button" class="cmp empty${placing ? " placing" : ""}" data-action="slot-${slot.toLowerCase()}">
-      <span><b style="color:${colour}">${slot}</b> · ${placing ? `Click the map to place area ${slot}` : `Pick ${slot}, then click the map`}</span></button>`;
-    return `<div class="cmp${placing ? " placing" : ""}"><p class="who"><b style="background:${colour}">${slot}</b>Near ${s.name}</p>
-      <div><p class="big" data-count="${s.now}" data-key="${slot}">${fmt(s.now)}</p>${s.change ? `<span class="pill ${s.change.cls}">${s.change.text}</span>` : ""}
-        <p class="hint">Busiest per hour: ${busiestShort(s.buckets)}</p></div>
-      <div><p class="sec">Most common</p>${state.type === "all" ? typeBars(s.top, 3) : timeTiles(s.buckets)}</div></div>`;
-  };
-  let insight = "";
-  if (A && B && (A.now || B.now)) {
-    const [hi, lo, hiN, loN] = A.now >= B.now ? [A, B, "A", "B"] : [B, A, "B", "A"];
-    const ratio = hi.now / Math.max(lo.now, 1);
-    // A ratio against a handful of reports ("524.0×") says less than the two counts do
-    const parts = [ratio < 1.15 ? "A and B have a similar number of reports."
-      : lo.now < CONFIG.minForChange ? `Area ${hiN} has ${fmt(hi.now)} reports against ${fmt(lo.now)} at area ${loN}.`
-      : `Area ${hiN} has about ${ratio.toFixed(1)}× the reports of area ${loN}.`];
-    // The crime type whose share differs most between the two areas
-    if (state.type === "all" && A.now >= 20 && B.now >= 20) {
-      const share = (s) => new Map(s.top.map(([t, n]) => [t, n / s.now]));
-      const sa = share(A), sb = share(B);
-      let best = null;
-      for (const t of new Set([...sa.keys(), ...sb.keys()])) {
-        const pa = sa.get(t) || 0, pb = sb.get(t) || 0, hiShare = Math.max(pa, pb), loShare = Math.min(pa, pb);
-        if (hiShare < 0.06) continue;
-        const r = hiShare / Math.max(loShare, 0.01);
-        if (r >= 1.6 && (!best || r > best.r)) best = { t, r, where: pa > pb ? "A" : "B", pa, pb };
-      }
-      if (best) parts.push(`${best.t} is a bigger share at ${best.where} (${Math.round(best.where === "A" ? best.pa * 100 : best.pb * 100)}% vs ${Math.round(best.where === "A" ? best.pb * 100 : best.pa * 100)}%).`);
+// One area's card, or an empty card for an area not placed yet (slot is "A" or "B")
+function compareCard(s, slot) {
+  const colour = slot === "A" ? "var(--sea)" : "var(--b)", placing = state.nextSlot === slot.toLowerCase();
+  // An empty card is a button: click it to pick that area, then click the map
+  if (!s) return `<button type="button" class="cmp empty${placing ? " placing" : ""}" data-action="slot-${slot.toLowerCase()}">
+    <span><b style="color:${colour}">${slot}</b> · ${placing ? `Click the map to place area ${slot}, then drag its label to move it` : `Pick ${slot}, then click the map`}</span></button>`;
+  return `<div class="cmp${placing ? " placing" : ""}"><h3 class="who"><b style="background:${colour}">${slot}</b>Near ${s.name}</h3>
+    <p class="big" data-count="${s.now}" data-key="${slot}">${fmt(s.now)}</p>${s.change ? `<span class="pill ${s.change.cls}" title="${s.change.text}">${s.change.text.replace("same dates ", "")}</span>` : ""}
+    <p class="hint">Busiest per hour: ${busiestShort(s.buckets)}</p></div>`;
+}
+// Head to head: one row per crime type (the top three of each area) or per part of the day, as [name, A's count, B's count]
+function compareRows(A, B) {
+  const countOf = (s, t) => s?.top.find(([x]) => x === t)?.[1] || 0;
+  return state.type === "all"
+    ? [...new Set([...(A?.top || []).slice(0, 3), ...(B?.top || []).slice(0, 3)].map(([t]) => t))].map((t) => [t, countOf(A, t), countOf(B, t)])
+    : Object.keys(IN_BUCKET).map((k) => [cap(k), A?.buckets[k] || 0, B?.buckets[k] || 0]);
+}
+// The rows with A and B side by side, each with its share of that area's reports so a quiet and a busy area can still be compared
+function compareTable(A, B, rows) {
+  if (!A && !B) return "";
+  const cell = (s, n) => (s ? `<span class="n">${fmt(n)} <small>${s.now ? Math.round((n / s.now) * 100) : 0}%</small></span>` : `<span class="n">–</span>`);
+  return `<div class="h2h"><h3 class="sec">${state.type === "all" ? "Most common" : "By time of day"}</h3><b>A</b><b>B</b>
+    ${rows.map(([t, a, b]) => `<span>${t}</span>${cell(A, a)}${cell(B, b)}`).join("")}</div>`;
+}
+// A line or two on how the two areas differ, once both are placed
+function compareInsight(A, B, rows) {
+  if (!A || !B || (!A.now && !B.now)) return "";
+  const [hi, lo, hiN, loN] = A.now >= B.now ? [A, B, "A", "B"] : [B, A, "B", "A"];
+  const ratio = hi.now / Math.max(lo.now, 1);
+  // A ratio against a handful of reports ("524.0×") says less than the two counts do
+  const parts = [ratio < 1.15 ? "A and B have a similar number of reports."
+    : lo.now < CONFIG.minForChange ? `Area ${hiN} has ${fmt(hi.now)} reports against ${fmt(lo.now)} at area ${loN}.`
+    : `Area ${hiN} has about ${ratio.toFixed(1)}× the reports of area ${loN}.`];
+  // The crime type whose share differs most between the two areas
+  if (state.type === "all" && A.now >= 20 && B.now >= 20) {
+    const share = (s) => new Map(s.top.map(([t, n]) => [t, n / s.now]));
+    const sa = share(A), sb = share(B);
+    let best = null;
+    for (const [t] of rows) {   // only types in the table, so the insight never names one it doesn't show
+      const pa = sa.get(t) || 0, pb = sb.get(t) || 0, hiShare = Math.max(pa, pb), loShare = Math.min(pa, pb);
+      if (hiShare < 0.06) continue;
+      const r = hiShare / Math.max(loShare, 0.01);
+      if (r >= 1.6 && (!best || r > best.r)) best = { t, r, where: pa > pb ? "A" : "B", hiShare, loShare };
     }
-    parts.push("Busier spots usually have more people, shops and transit, so they get more reports.");
-    insight = `<div class="tip">${ICON_INFO}<span>${parts.join(" ")}</span></div>`;
+    if (best) parts.unshift(`${best.t} is a bigger share at ${best.where} (${Math.round(best.hiShare * 100)}% vs ${Math.round(best.loShare * 100)}%).`);
   }
-  $("compare").innerHTML = `${handle}
+  parts.push("Busier spots usually have more people, shops and transit, so they get more reports.");
+  return `<div class="tip">${ICON_INFO}<span>${parts.join(" ")}</span></div>`;
+}
+
+function renderCompare() {
+  const A = state.a && areaStats(state.a), B = state.b && areaStats(state.b), rows = compareRows(A, B);
+  $("compare").innerHTML = `${sheetHandle}
     <div class="cmp-head"><div><h2>Compare two areas</h2>
-      <p>Within ${CONFIG.radiusMeters} m of each spot, ${periodLabel()} · ${filterLine()}. Pick A or B, then click the map, or drag a label on the map.</p></div>
+      <p>Within ${CONFIG.radiusMeters} m of each spot, ${periodLabel()} · ${filterLine()}.</p></div>
       <div class="cmp-actions">
         <div class="slot-pick" role="group" aria-label="Which area a map click places"><span>Place</span>
           <button type="button" class="ab a" data-action="slot-a" aria-pressed="${state.nextSlot === "a"}">A</button><button type="button" class="ab b" data-action="slot-b" aria-pressed="${state.nextSlot === "b"}">B</button></div>
         <button type="button" class="btn" data-action="swap">Swap</button><button type="button" class="btn" data-action="reset">Clear</button></div></div>
-    ${noYears() ? pickYear : `<div class="cmp-grid">${card(A, "A")}${card(B, "B")}</div>${insight}`}`;
+    ${noYears() ? pickYear : `<div class="cmp-grid">${compareCard(A, "A")}${compareCard(B, "B")}</div>${compareTable(A, B, rows)}${compareInsight(A, B, rows)}`}`;
 }
 
 // ---------------------------------------------------------------------
@@ -925,22 +1058,52 @@ function weekday(y, m, d) {   // 0 = Sunday (Sakamoto's method)
 
 function renderTrends() {
   if (noYears()) {
-    $("trends").innerHTML = `${handle}<h2>Vancouver</h2><p class="sub">${filterLine()}.</p>${pickYear}`;
+    $("trends").innerHTML = `${sheetHandle}<h2>Vancouver</h2><p class="sub">${filterLine()}.</p>${pickYear}`;
     return;
   }
   const perYear = new Map(), types = new Map(), hours = new Array(24).fill(0), days = new Array(7).fill(0);
   let total = 0, before = 0;
   for (const p of state.data.points) {
     if (!passesFilters(p)) continue;
-    perYear.set(p[YEAR], (perYear.get(p[YEAR]) || 0) + 1);
+    bump(perYear, p[YEAR]);
     if (matches(p, state.compare)) before++;
     if (!state.shown.years.has(p[YEAR])) continue;
     total++;
-    types.set(p[TYPE], (types.get(p[TYPE]) || 0) + 1);
+    bump(types, p[TYPE]);
     if (p[HOUR] >= 0) hours[p[HOUR]]++;
     days[weekday(p[YEAR], Math.floor(p[MD] / 100), p[MD] % 100)]++;
   }
-  const top = [...types.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]).map(([t, n]) => [state.data.types[t].label, n]);
+  const top = ranked(types).map(([t, n]) => [state.data.types[t].label, n]);
+  const span = yearSpan(), missing = missingYears();
+  const maxY = Math.max(1, ...span.map((y) => fullYearPace(y, perYear.get(y) || 0)));
+  const maxH = Math.max(1, ...hours);
+
+  let areaHtml = "";
+  if (state.selected) {
+    const s = areaStats(state.selected);
+    areaHtml = `<div class="tsec"><h3>Near ${s.name} (${CONFIG.radiusMeters} m)</h3>
+      <p class="big" style="font-size:1.9rem" data-count="${s.now}" data-key="trend-area">${fmt(s.now)}</p>${s.change ? `<span class="pill ${s.change.cls}">${s.change.text}</span>` : ""}
+      <p class="hint" style="margin-top:8px"><a href="#" data-action="open-map">See the full area summary</a></p></div>`;
+  }
+
+  $("trends").innerHTML = `${sheetHandle}
+    <h2>Vancouver ${periodLabel()}</h2>
+    <p class="sub">${filterLine()}. Click the map to add an area.</p>
+    ${trendMetrics({ total, before, perYear, top, hours, days })}
+    <div class="tsec"><h3>Year by year</h3>
+      <div class="ybars" role="img" aria-label="${attr(yearSummary(span, perYear, "Reports city-wide"))}">${span.map((y, i) => `<div>${missing.includes(y)
+        ? `<i class="gap" style="height:30%" title="No ${y} data"></i>`
+        : yearBar(y, perYear.get(y) || 0, maxY, i)}<span>${String(y).slice(2)}</span></div>`).join("")}</div>
+      <p class="hint">Coloured bars are the years you've selected.${missing.length ? ` No data for ${missing.join(", ")}.` : ""}${state.data.partialYear ? ` ${paceNote()}` : ""}</p></div>
+    <div class="tsec"><h3>Hour of the day</h3>
+      <div class="hbars" role="img" aria-label="${attr(hourSummary(hours, "Reports city-wide"))}">${TRACK_ORDER.map((h, i) => `<i style="height:${(hours[h] / maxH) * 100}%;--i:${i}" title="${fmtHour(h)}: ${fmt(hours[h])}"></i>`).join("")}</div>
+      ${HOUR_AXIS}</div>
+    ${state.type === "all" ? `<div class="tsec"><h3>Most common</h3>${typeBars(top, 6)}</div>` : ""}
+    ${areaHtml}`;
+}
+
+// The four tiles at the top of Trends: per day, change (or busiest year), busiest hour, and most common type (or busiest day)
+function trendMetrics({ total, before, perYear, top, hours, days }) {
   const ch = changeInfo(total, before);
   const peakHour = hours.indexOf(Math.max(...hours));
   const sel = selectedYears();
@@ -952,40 +1115,13 @@ function renderTrends() {
   } else second = `<p>Change</p><p>–</p><p>${ch ? ch.text : "No earlier year"}</p>`;
   const fourth = state.type === "all" && top.length
     ? `<p>Most common</p><p>${Math.round((top[0][1] / Math.max(total, 1)) * 100)}%</p><p>${top[0][0]}</p>`
-    : `<p>Busiest day</p><p>${WEEKDAYS[days.indexOf(Math.max(...days))].slice(0, 3)}</p><p>${typeLabel()}</p>`;
-
-  const ys = state.data.years, missing = missingYears(), span = [];
-  for (let y = ys[0]; y <= ys[ys.length - 1]; y++) span.push(y);
-  const maxY = Math.max(1, ...span.map((y) => perYear.get(y) || 0));
-  const maxH = Math.max(1, ...hours);
-
-  let areaHtml = "";
-  if (state.selected) {
-    const s = areaStats(state.selected);
-    areaHtml = `<div class="tsec"><h3>Near ${s.name} (${CONFIG.radiusMeters} m)</h3>
-      <p class="big" style="font-size:1.9rem" data-count="${s.now}" data-key="trend-area">${fmt(s.now)}</p>${s.change ? `<span class="pill ${s.change.cls}">${s.change.text}</span>` : ""}
-      <p class="hint" style="margin-top:8px"><a href="#" data-action="open-map">See the full area summary</a></p></div>`;
-  }
-
-  $("trends").innerHTML = `${handle}
-    <h2>Vancouver ${periodLabel()}</h2>
-    <p class="sub">${filterLine()}. Click the map to add an area.</p>
-    <div class="metrics">
-      <div class="metric"><p>Reported incidents</p><p data-count="${total}" data-key="trend">${fmt(total)}</p><p>${sel.length === 1 && isPartial(sel[0]) ? `Jan 1 to ${throughLabel()}` : `${sel.length} year${sel.length !== 1 ? "s" : ""}`}</p></div>
+    : `<p>Busiest day</p><p>${WEEKDAYS[days.indexOf(Math.max(...days))].slice(0, 3)}</p><p>${Math.round((Math.max(...days) / Math.max(total, 1)) * 100)}% of reports</p>`;
+  return `<div class="metrics">
+      <div class="metric"><p>Per day</p><p>${fmt(Math.round(total / daysIn(sel)))}</p><p>${fmt(total)} ${sel.length === 1 && isPartial(sel[0]) ? `from Jan 1 to ${throughLabel()}` : `over ${sel.length} year${sel.length !== 1 ? "s" : ""}`}</p></div>
       <div class="metric">${second}</div>
-      <div class="metric"><p>Busiest hour</p><p>${total ? fmtHour(peakHour) : "–"}</p><p>Across the city</p></div>
+      <div class="metric"><p>Busiest hour</p><p>${total ? fmtHour(peakHour) : "–"}</p><p>${total ? `${Math.round((hours[peakHour] / Math.max(1, sum(hours))) * 100)}% of reports` : "No times recorded"}</p></div>
       <div class="metric">${fourth}</div>
-    </div>
-    <div class="tsec"><h3>Year by year</h3>
-      <div class="ybars">${span.map((y, i) => `<div>${missing.includes(y)
-        ? `<i class="gap" style="height:30%" title="No ${y} data"></i>`
-        : `<i class="${state.years.has(y) ? "on" : ""} ${isPartial(y) ? "part" : ""}" style="height:${((perYear.get(y) || 0) / maxY) * 100}%;--i:${i}" title="${y}: ${fmt(perYear.get(y) || 0)}"></i>`}<span>${String(y).slice(2)}</span></div>`).join("")}</div>
-      <p class="hint">Coloured bars are the years you've selected.${missing.length ? ` No data for ${missing.join(", ")}.` : ""}${state.data.partialYear ? ` ${state.data.partialYear} runs to ${throughLabel()}.` : ""}</p></div>
-    <div class="tsec"><h3>Hour of the day</h3>
-      <div class="hbars">${hours.map((n, h) => `<i style="height:${(n / maxH) * 100}%;--i:${h}" title="${fmtHour(h)}: ${fmt(n)}"></i>`).join("")}</div>
-      <div class="hbars-x"><span>12 am</span><span>6 am</span><span>12 pm</span><span>6 pm</span><span>11 pm</span></div></div>
-    ${state.type === "all" ? `<div class="tsec"><h3>Most common</h3>${typeBars(top, 6)}</div>` : ""}
-    ${areaHtml}`;
+    </div>`;
 }
 
 // ---------------------------------------------------------------------
@@ -995,7 +1131,46 @@ function renderPanels() {
   if (state.view === "map") renderArea();
   else if (state.view === "compare") renderCompare();
   else renderTrends();
-  countUp($(PANEL_FOR[state.view]));
+  const panel = $(PANEL_FOR[state.view]);
+  panel.querySelector(".sheet-handle")?.setAttribute("aria-expanded", String(!panel.classList.contains("collapsed")));
+  countUp(panel);
+  writeUrl();
+}
+
+// ---------------------------------------------------------------------
+// The link: view, filters and spots live in the address (after #), so a reload or a shared link opens the same thing
+// ---------------------------------------------------------------------
+const llText = (ll) => `${ll.lat.toFixed(4)},${ll.lng.toFixed(4)}`;
+function writeUrl() {
+  const q = new URLSearchParams({ view: state.view });
+  q.set("years", allSelected() ? "all" : selectedYears().join(",") || "none");
+  if (state.type !== "all") q.set("type", typeLabel());
+  if (state.hours) q.set("hours", TRACK_ORDER.filter((h) => state.hours.has(h)).join(","));
+  for (const k of ["selected", "a", "b"]) if (state[k]) q.set(k === "selected" ? "spot" : k, llText(state[k]));
+  history.replaceState(null, "", `#${String(q).replaceAll("%2C", ",")}`);   // plain commas read better in a shared link
+}
+// Anything missing or not valid is skipped (and drops out of the address on the next write)
+function readUrl() {
+  const q = new URLSearchParams(location.hash.slice(1)), ys = state.data.years;
+  const years = q.get("years");
+  if (years === "all") state.years = new Set(ys);
+  else if (years === "none") state.years = new Set();
+  else if (years) {
+    const picked = years.split(",").map(Number).filter((y) => ys.includes(y));
+    if (picked.length) state.years = new Set(picked);
+  }
+  const type = state.data.types.findIndex((t) => t.label === q.get("type"));
+  if (type >= 0) { state.type = type; $("type").value = String(type); }
+  if (q.get("hours")) setHours(new Set(q.get("hours").split(",").map(Number).filter((h) => Number.isInteger(h) && h >= 0 && h < 24)));
+  const spot = (k) => {
+    const [lat, lng] = (q.get(k) || "").split(",").map(Number), ll = Number.isFinite(lat) && Number.isFinite(lng) && L.latLng(lat, lng);
+    return ll && !isOutside(ll) ? ll : null;
+  };
+  state.selected = spot("spot"); state.a = spot("a"); state.b = spot("b");
+  state.nextSlot = state.a && !state.b ? "b" : "a";
+  if (state.selected) areaCircle.setLatLng(state.selected);
+  const view = q.get("view");
+  return Object.hasOwn(PANEL_FOR, view) ? view : null;
 }
 function syncCircles() {
   const show = (layer, on) => { if (on && !map.hasLayer(layer)) layer.addTo(map); if (!on && map.hasLayer(layer)) map.removeLayer(layer); };
@@ -1030,13 +1205,19 @@ function setView(view) {
 // Controls
 // ---------------------------------------------------------------------
 function buildControls() {
-  const { types, neighbourhoods, points } = state.data;
+  buildYearPicker();
+  buildTypePicker();
+  bindTimeControls();
+  bindSearch();
+  bindMapClicks();
+  bindPanelButtons();
+}
 
-  // Years: an "All years" button, then one button per year, newest first
+// Years: an "All years" button, then one button per year, newest first
+function buildYearPicker() {
   const ys = state.data.years;
   const missing = missingYears();
-  const span = [];
-  for (let y = ys[ys.length - 1]; y >= ys[0]; y--) span.push(y);   // newest first, gaps included
+  const span = yearSpan().reverse();   // newest first, gaps included
   // "Clear" and "All years" sit on the heading's line; Clear only shows while something is selected
   $("years").innerHTML = `<span class="year-actions"><button type="button" class="clear" data-year="none">Clear</button>` +
     (ys.length > 1 ? `<button type="button" class="all" data-year="all">All years</button>` : "") + `</span>` +
@@ -1064,8 +1245,11 @@ function buildControls() {
     }
     refresh();
   });
+}
 
-  // Crime types, most common first (across all years)
+// Crime types, most common first (across all years)
+function buildTypePicker() {
+  const { types, points } = state.data;
   const totals = new Array(types.length).fill(0);
   for (const p of points) totals[p[TYPE]]++;
   const order = types.map((_, i) => i).sort((a, b) => totals[b] - totals[a]);
@@ -1077,10 +1261,11 @@ function buildControls() {
     state.type = e.target.value === "all" ? "all" : Number(e.target.value);
     refresh();
   });
+}
 
-  bindTimeControls();
-
-  // Neighbourhood search: pick from the list (or type part of a name and press Enter)
+// Neighbourhood search: pick from the list (or type part of a name and press Enter)
+function bindSearch() {
+  const { neighbourhoods } = state.data;
   const goToHood = () => {
     const q = $("search").value.trim().toLowerCase();
     if (!q) return;
@@ -1134,7 +1319,10 @@ function buildControls() {
     }
   });
   input.addEventListener("click", () => { if (list.hidden) openList(); });   // already focused, so no focus event
+}
 
+// A click on the map picks a spot; on screens with a cursor, a dashed circle previews it
+function bindMapClicks() {
   map.on("click", (e) => {
     // Outside the data there's nothing to summarize, so say so and keep whatever was selected
     if (isOutside(e.latlng)) return showToast(OUTSIDE_NOTE);
@@ -1150,11 +1338,17 @@ function buildControls() {
     });
     map.on("mouseout", () => ghost.remove());
   }
+}
 
-  // Buttons inside the panels (close, swap, clear, open map)
+// Buttons inside the panels (sheet handle, close, swap, clear, open map, place A or B)
+function bindPanelButtons() {
   for (const id of ["area", "compare", "trends"]) {
     $(id).addEventListener("click", (e) => {
-      if (e.target.closest(".sheet-handle")) { $(id).classList.toggle("collapsed"); return; }
+      if (e.target.closest(".sheet-handle")) {
+        const collapsed = $(id).classList.toggle("collapsed");
+        e.target.closest(".sheet-handle").setAttribute("aria-expanded", String(!collapsed));
+        return;
+      }
       const action = e.target.closest("[data-action]")?.dataset.action;
       if (!action) return;
       e.preventDefault();
@@ -1171,9 +1365,11 @@ function syncYearButtons() {
   const all = allSelected() && state.data.years.length > 1;
   for (const btn of document.querySelectorAll("#years button")) {
     if (btn.dataset.year === "none") { btn.hidden = !state.years.size; continue; }
-    const on = btn.dataset.year === "all" ? all : state.years.has(Number(btn.dataset.year));
+    // Under "All years" each year is included but not picked: a tap picks just that year, so it isn't "pressed"
+    const on = btn.dataset.year === "all" ? all : !all && state.years.has(Number(btn.dataset.year));
     btn.setAttribute("aria-pressed", String(on));
   }
+  $("years").classList.toggle("all-in", all);
 }
 
 function refresh() {
@@ -1190,6 +1386,12 @@ function noLocationCount() {
   for (const [y, count] of Object.entries(state.data.noLocationByYear || {})) if (state.shown.years.has(Number(y))) n += count;
   return n;
 }
+// The legend is a picture of the heat colours, so it gets one sentence (redone when the theme or filters change)
+function labelLegend() {
+  $("legend").setAttribute("aria-label", `Map key, ${$("legend-title").textContent.toLowerCase()}: ` +
+    (isDark() ? "dark purple where fewer are reported, through orange, to pale yellow where most are." : "pale amber where fewer are reported, through rose, to deep plum where most are.") +
+    ($("legend-note").hidden ? "" : ` ${$("legend-note").textContent}`));
+}
 function renderAbout() {
   const d = state.data;
   const through = new Date(d.latestDate + "T12:00:00").toLocaleDateString("en-CA", { year: "numeric", month: "long", day: "numeric" });
@@ -1200,13 +1402,18 @@ function renderAbout() {
     <p>Far more reports are timed at midnight than at 1 am, which usually means some incidents with no exact time are recorded as 12 am. Overnight counts may run a little high.</p>`;
   const p = d.partialYear;
   const full = state.shown.years.has(p) ? `${p} scaled to a full year` : "";
+  $("legend-note").hidden = state.type === "all";
   $("legend-title").textContent = state.hours
     ? `${cap(timeLabel())}, per hour${full ? `; ${full}` : ""}`
     : full ? `Per year, ${full}` : "Incidents per year";
+  labelLegend();
 }
 
-function showError(message) {
-  $("status").innerHTML = `<div>${message}</div>`;
+// Visitors get a plain message and a way to retry; the steps for whoever runs the site go to the console
+function showError(devHint) {
+  console.error(`VanScene: ${devHint}`);
+  $("status").innerHTML = `<div><p>Couldn't load the crime data.</p><p class="hint">Check your connection, then try again.</p>
+    <button type="button" class="btn" style="margin-top:12px" onclick="location.reload()">Reload</button></div>`;
   $("status").classList.add("show");
 }
 
@@ -1216,7 +1423,7 @@ for (const b of document.querySelectorAll(".views button")) {
 }
 // The search lives in the header, except on phones where the header has no room and it joins the Filters row
 function placeSearch() {
-  (phoneQuery.matches ? $("filters-top") : $("head-search")).prepend(document.querySelector(".search"));
+  (isPhone() ? $("filters-top") : $("head-search")).prepend(document.querySelector(".search"));
 }
 phoneQuery.addEventListener("change", placeSearch);
 placeSearch();
@@ -1229,19 +1436,19 @@ $("filters-btn").addEventListener("click", () => {
 });
 
 function syncThemeButton() {
-  const dark = document.documentElement.getAttribute("data-theme") === "dark";
-  $("theme-toggle").setAttribute("aria-pressed", String(dark));
-  $("theme-toggle").title = dark ? "Switch to light mode" : "Switch to dark mode";
-  $("theme-toggle").setAttribute("aria-label", dark ? "Switch to light mode" : "Switch to dark mode");
+  const label = isDark() ? "Switch to light mode" : "Switch to dark mode";
+  $("theme-toggle").title = label;
+  $("theme-toggle").setAttribute("aria-label", label);
 }
 $("theme-toggle").addEventListener("click", () => {
-  const next = document.documentElement.getAttribute("data-theme") === "dark" ? "light" : "dark";
+  const next = isDark() ? "light" : "dark";
   document.documentElement.setAttribute("data-theme", next);
   try { localStorage.setItem("theme", next); } catch (e) {}   // remember the choice for next visit
   syncThemeButton();
   paintCoverage();                                            // re-colour the inside/outside shading
   paintCircles();
   heat.setOptions({ gradient: heatGradient() });
+  if (state.data) labelLegend();
 });
 syncThemeButton();
 
@@ -1261,7 +1468,7 @@ function pointRows(c) {
 
 async function start() {
   if (location.protocol === "file:") {
-    showError(`This page needs a local web server to load its data. In a terminal, go to the <code>web</code> folder and run <code>python -m http.server 8000</code>, then open <code>http://localhost:8000</code>.`);
+    showError("this page needs a local web server to load its data. In a terminal, go to the web folder and run python -m http.server 8000, then open http://localhost:8000.");
     return;
   }
   try {
@@ -1270,21 +1477,27 @@ async function start() {
     state.data = await res.json();
     if (state.data.version >= 3) state.data.points = pointRows(state.data.points);
   } catch (err) {
-    showError(`Couldn't load <code>${CONFIG.dataUrl}</code>. Run <code>python scripts/prepare_data.py</code> from the project folder to create it, then reload this page.`);
+    showError(`couldn't load ${CONFIG.dataUrl} (${err.message}). Run python scripts/prepare_data.py from the project folder to create it, then reload this page.`);
     return;
   }
   if (!Array.isArray(state.data.years)) {
-    showError(`This <code>data.json</code> was made by the old script. Run <code>python scripts/prepare_data.py</code> from version 2, then reload this page.`);
+    showError("this data.json was made by the old script. Run python scripts/prepare_data.py from version 2, then reload this page.");
     return;
   }
   $("status").classList.remove("show");
   addCoverageMask(state.data.points);
   buildControls();
+  const linked = readUrl();
   buildPeriods();
-  setView(["map", "compare", "trends"].includes(CONFIG.defaultView) ? CONFIG.defaultView : "map");
+  setView(linked || (Object.hasOwn(PANEL_FOR, CONFIG.defaultView) ? CONFIG.defaultView : "map"));
   refresh();
-  showToast(`Click anywhere on the map to see what's been reported within ${CONFIG.radiusMeters} m, or search a neighbourhood.`, 7000);
-  requestAnimationFrame(() => { map.invalidateSize(); map.fitBounds(CITY_BOUNDS, { ...panelPadding(L.latLngBounds(CITY_BOUNDS)), maxZoom: 13, animate: false }); });
+  const spotted = state.view === "compare" ? state.a : state.selected;
+  if (!spotted) showToast(`Click anywhere on the map to see what's been reported within ${CONFIG.radiusMeters} m, or search a neighbourhood.`, 7000);
+  requestAnimationFrame(() => {
+    map.invalidateSize();
+    if (spotted) fitForView();   // a link with a spot opens on it
+    else map.fitBounds(CITY_BOUNDS, { ...panelPadding(L.latLngBounds(CITY_BOUNDS)), maxZoom: 13, animate: false });
+  });
 }
 
 start();
