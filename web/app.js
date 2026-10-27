@@ -794,7 +794,7 @@ const blurredNote = () => {
   const blurred = state.type === "all" ? state.data.types.some((t) => t.blurred) : state.data.types[state.type].blurred;
   return blurred ? `<p class="foot">VPD spreads the locations of offences against a person across several blocks, so read those as area-level only.</p>` : "";
 };
-const handle = `<button type="button" class="sheet-handle" aria-label="Show or hide details"></button>`;
+const handle = `<button type="button" class="sheet-handle" aria-label="Show or hide details" aria-expanded="true"></button>`;
 // With every year unticked there's nothing to count, so panels say so instead of showing zeros
 const noYears = () => !state.shown.years.size;
 const pickYear = `<div class="tip">${ICON_INFO}<span>Pick a year in the filters to see what's been reported.</span></div>`;
@@ -1057,7 +1057,9 @@ function renderPanels() {
   if (state.view === "map") renderArea();
   else if (state.view === "compare") renderCompare();
   else renderTrends();
-  countUp($(PANEL_FOR[state.view]));
+  const panel = $(PANEL_FOR[state.view]);
+  panel.querySelector(".sheet-handle")?.setAttribute("aria-expanded", String(!panel.classList.contains("collapsed")));
+  countUp(panel);
 }
 function syncCircles() {
   const show = (layer, on) => { if (on && !map.hasLayer(layer)) layer.addTo(map); if (!on && map.hasLayer(layer)) map.removeLayer(layer); };
@@ -1216,7 +1218,11 @@ function buildControls() {
   // Buttons inside the panels (close, swap, clear, open map)
   for (const id of ["area", "compare", "trends"]) {
     $(id).addEventListener("click", (e) => {
-      if (e.target.closest(".sheet-handle")) { $(id).classList.toggle("collapsed"); return; }
+      if (e.target.closest(".sheet-handle")) {
+        const collapsed = $(id).classList.toggle("collapsed");
+        e.target.closest(".sheet-handle").setAttribute("aria-expanded", String(!collapsed));
+        return;
+      }
       const action = e.target.closest("[data-action]")?.dataset.action;
       if (!action) return;
       e.preventDefault();

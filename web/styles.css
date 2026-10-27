@@ -342,16 +342,23 @@ body, .site-head, .panel, select, .search { transition: background-color 0.3s, c
   .head-search { display: none; }
   .brand h1 { font-size: 1rem; }
   .filters-top { display: flex; }
-  .views { flex: 1; justify-content: space-between; }
-  .views button { flex: 1; justify-content: center; padding: 6px 4px; }
-  .theme-toggle { width: 34px; height: 34px; }
+  /* Map, Compare and Trends in a bar along the bottom, in thumb reach; the map and sheets sit above it */
+  .brand { flex: 1; }
+  .views { position: fixed; left: 0; right: 0; bottom: 0; z-index: 30; gap: 4px; border: 0; border-top: 1px solid var(--line); border-radius: 0;
+    background: var(--surface); padding: 6px 8px calc(6px + env(safe-area-inset-bottom)); }
+  .views button { flex: 1; flex-direction: column; justify-content: center; gap: 2px; min-height: 48px; padding: 4px; font-size: 0.78rem; }
+  .views button svg { width: 20px; height: 20px; }
+  .app { margin-bottom: calc(61px + env(safe-area-inset-bottom)); }   /* the bar's height, so nothing hides under it */
+  .theme-toggle { width: 44px; height: 44px; }
 
   .filters { top: 8px; left: 8px; right: 8px; bottom: auto; width: auto; max-height: calc(100% - 16px); padding: 10px; gap: 10px; }
-  .filters-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 0 12px; height: 42px; cursor: pointer; font-size: 0.88rem; }
+  .filters-btn { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); background: var(--surface); border-radius: 10px; padding: 0 12px; height: 44px; cursor: pointer; font-size: 0.88rem; }
   .filters-btn svg { width: 16px; height: 16px; }
   .filters-btn[aria-expanded="true"] { background: var(--sea); color: var(--on-sea); border-color: var(--sea); }
   .filters-body, details.about { display: none; }
   .filters.open { z-index: 12; }
+  /* An open Filters panel covers most of the map; hide the sheet behind it rather than let it show through */
+  .app:has(.filters.open) :is(.area, .compare, .trends) { visibility: hidden; }
   .filters:not(.open) { overflow: visible; }   /* the closed panel is one row: let the suggestions hang below it */
   .filters.open .filters-body, .filters.open details.about { display: flex; }
   .filters.open details.about { display: block; }
@@ -361,14 +368,22 @@ body, .site-head, .panel, select, .search { transition: background-color 0.3s, c
   .legend .ends { margin: 0; gap: 0; display: contents; }
 
   .area, .compare, .trends { left: 0; right: 0; bottom: 0; top: auto; width: auto; max-height: 48%; border-radius: 18px 18px 0 0; border-bottom: 0; padding: 4px 16px 18px; }
-  .sheet-handle { display: block; width: 100%; height: 22px; border: 0; background: transparent; cursor: pointer; position: sticky; top: 0; z-index: 1; }
-  .sheet-handle::before { content: ""; display: block; width: 40px; height: 4px; border-radius: 2px; background: var(--line); margin: 6px auto 0; }
-  .panel.collapsed { max-height: 92px; overflow: hidden; }
+  .sheet-handle { display: block; width: 100%; height: 32px; border: 0; background: transparent; cursor: pointer; position: sticky; top: 0; z-index: 1; }
+  .sheet-handle::before { content: ""; display: block; width: 40px; height: 4px; border-radius: 2px; background: var(--faint); margin: 10px auto 0; }
+  .panel.collapsed { max-height: 102px; overflow: hidden; }
   .big { font-size: 2.2rem; }
   .cmp-grid { grid-template-columns: 1fr 1fr; gap: 8px; }   /* side by side in the bottom sheet, as before */
   .cmp { padding: 10px; }
   .h2h { grid-template-columns: minmax(0, 1fr) 76px 76px; font-size: 0.8rem; }
   #map .leaflet-control-zoom { display: none; }
-  #map .leaflet-bottom.leaflet-right { bottom: auto; top: 96px; }
-  .toast { top: 128px; left: 50%; max-width: calc(100% - 32px); }   /* below the search row, clear of the bottom sheet */
+  #map .leaflet-bottom.leaflet-right { bottom: auto; top: 108px; }   /* just clear of the search panel, which ends 103px down */
+  .toast { top: 136px; left: 50%; max-width: calc(100% - 32px); }   /* below the search row, clear of the bottom sheet */
+}
+
+/* Touch screens, any size: the small filter controls get 44px tap heights */
+@media (pointer: coarse) {
+  .year-pick button { min-height: 44px; }
+  .day-track > button:not(.all) { min-height: 44px; }
+  .day-track .all { padding: 12px 6px; bottom: calc(100% - 8px); }   /* a bigger hit area without moving the text */
+  .track-bars { height: 44px; }   /* each hour is ~14px wide, so make it tall; dragging across them also works */
 }
