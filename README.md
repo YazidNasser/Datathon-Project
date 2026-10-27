@@ -2,7 +2,11 @@
 
 **See where and when crime is reported in Vancouver, in plain language.**
 
-![VanScene: picking years and evening hours, opening an area near Mount Pleasant, then comparing it with Kitsilano](docs/vanscene-demo.gif)
+<!-- GitHub shows the GIF that matches the reader's light or dark theme -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/vanscene-demo-dark.gif">
+  <img alt="VanScene: picking years and evening hours, opening an area near Mount Pleasant, then comparing it with Kitsilano" src="docs/vanscene-demo.gif">
+</picture>
 
 **[Open VanScene](https://vanscene.netlify.app)** · [Watch the 60-second demo](https://youtu.be/DbSOYitXOZY)
 
@@ -89,7 +93,8 @@ A static site with no framework and no build step. It's deployed on Netlify from
 │   ├── raw/              # create locally for VPD CSVs (not in the repo)
 │   └── vpd/              # VPD's disclaimer and data description
 ├── docs/
-│   └── vanscene-demo.gif # the animation at the top of this page
+│   ├── vanscene-demo.gif       # the animation at the top of this page, light theme
+│   └── vanscene-demo-dark.gif  # the same in the dark theme, shown to readers using GitHub's dark mode
 ├── scripts/
 │   ├── update_data.py    # downloads the latest VPD data, then runs prepare_data.py
 │   └── prepare_data.py   # turns the raw CSVs into web/data.json
