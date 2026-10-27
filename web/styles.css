@@ -13,8 +13,6 @@
   --sea-soft: #e1f0f5;
   --on-sea: #ffffff;       /* text on the accent colour */
   --b: #7a4fb0;            /* area B in Compare */
-  --up: #a8341d;   --up-soft: #fbeae5;     /* "up from last year" */
-  --down: #23744a; --down-soft: #e3f3ea;   /* "down from last year" */
   --bar-bg: #e9eef0;
   /* Heat map colours, fewest to most: on a light map "more" gets darker, on a dark map it gets brighter.
      Pale amber to deep plum (the dark theme's magma ramp run the other way), so busy reads as dense, not as danger red */
@@ -34,7 +32,6 @@
   --ink: #e4ecef; --muted: #a0b2b9; --faint: #8a9ca3; --line: #2b3a41;
   --page: #0e161a; --surface: #172227; --surface-2: #1f2c32;
   --sea: #4fb6d8; --sea-soft: #15343f; --on-sea: #06212b; --b: #b893ec;
-  --up: #f2907a; --up-soft: #3b1f17; --down: #72d29c; --down-soft: #14301f;
   --bar-bg: #24333a; --map-bg: #1b2327;
   --status-bg: rgba(14, 22, 26, 0.92);
   --tile-filter: grayscale(1) invert(1) brightness(0.9) contrast(0.85);
@@ -113,8 +110,7 @@ a { color: var(--sea); }
 .ab-b, .slot-pick .ab.b { --slot: var(--b); }
 /* The A and B handles at the centre of each Compare circle: drag one to move that area */
 #map .ab-handle { display: grid; place-items: center; border-radius: 50%; font-weight: 700; font-size: 0.85rem; cursor: grab;
-  color: var(--on-sea); border: 2px solid var(--surface); transition: box-shadow 0.2s, transform 0.12s; }
-#map .ab-handle { background: var(--slot); }
+  color: var(--on-sea); background: var(--slot); border: 2px solid var(--surface); transition: box-shadow 0.2s, transform 0.12s; }
 #map .ab-handle.placing { box-shadow: 0 0 0 3px var(--surface), 0 0 0 5px var(--slot); }   /* a ring on the handle a click will move */
 #map .ab-handle.leaflet-drag-target, #map .ab-handle:active { cursor: grabbing; transform: scale(1.1); }
 
@@ -129,13 +125,12 @@ a { color: var(--sea); }
 
 /* ---------------- Filters panel ---------------- */
 .filters-top { display: none; gap: 8px; }   /* only used on phones (search and Filters button) */
-.search { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; }
+.search { position: relative; flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; }
 .search:focus-within { border-color: var(--sea); }
 .search input::placeholder { color: var(--faint); opacity: 1; }   /* the browser's own grey was 3.1:1 on dark */
 .search svg { flex: none; width: 17px; height: 17px; color: var(--faint); }
 .search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font-size: 0.95rem; }
 /* The neighbourhood suggestions: always directly under the search box. It floats, so it is the one thing with a shadow. */
-.search { position: relative; }
 .suggest { position: absolute; z-index: 40; top: calc(100% + 6px); left: -1px; right: -1px; margin: 0; padding: 4px; list-style: none;
   max-height: min(320px, 60vh); overflow-y: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18); }
@@ -143,7 +138,7 @@ a { color: var(--sea); }
 .suggest li:hover, .suggest li[aria-selected="true"] { background: var(--surface-2); }
 .filters-btn { display: none; }
 .filters-body { display: flex; flex-direction: column; gap: 18px; }
-label.lab, .lab { display: block; font-weight: 700; font-size: 0.85rem; margin-bottom: 7px; }
+.lab { display: block; font-weight: 700; font-size: 0.85rem; margin-bottom: 7px; }
 fieldset { border: 0; margin: 0; padding: 0; min-width: 0; }
 legend { padding: 0; }
 select { width: 100%; height: 40px; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 0 10px; }
@@ -211,9 +206,8 @@ details.about p { margin-top: 8px; }
 .bar { height: 8px; border-radius: 4px; background: var(--bar-bg); overflow: hidden; }
 .bar span { display: block; height: 100%; border-radius: 4px; background: var(--muted); }   /* neutral: the heat colours mean the map */
 .tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
-.tiles div { background: var(--surface-2); border-radius: 10px; padding: 8px 2px; text-align: center; min-width: 0; }
 /* Like the Time of day filter: any time, every part in; otherwise the picked parts in its grey pill and the rest faded */
-.tiles div { background: transparent; color: var(--muted); }
+.tiles div { border-radius: 10px; padding: 8px 2px; text-align: center; min-width: 0; background: transparent; color: var(--muted); }
 .tiles.all-in div { background: var(--surface-2); color: var(--ink); }
 .tiles div.on, .tiles div.some { background: var(--bar-bg); color: var(--ink); }
 .tiles div.on p:first-child { font-weight: 700; }
@@ -236,8 +230,6 @@ details.about p { margin-top: 8px; }
 .card-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 .x { flex: none; width: 30px; height: 30px; border-radius: 8px; border: 1px solid var(--line); background: var(--surface); cursor: pointer; display: grid; place-items: center; color: var(--muted); }
 .x svg { width: 15px; height: 15px; }
-.empty p { color: var(--muted); font-size: 0.9rem; }
-.empty .place { margin-bottom: 6px; }
 
 /* ---------------- Compare ---------------- */
 .cmp-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
@@ -250,7 +242,6 @@ details.about p { margin-top: 8px; }
 .cmp { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: grid; gap: 4px; align-content: start; justify-items: start; }
 .cmp .who { display: flex; align-items: flex-start; gap: 8px; font-weight: 700; font-size: 0.9rem; line-height: 1.3; }
 .cmp .who b { flex: none; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; color: var(--on-sea); font-size: 0.75rem; }
-.cmp .who small { font-weight: 400; color: var(--muted); }
 .cmp .big { font-size: 1.6rem; }
 .cmp .pill { margin-top: 0; font-size: 0.75rem; padding: 2px 8px; }
 /* A and B side by side, one row per crime type or part of the day */
@@ -339,7 +330,6 @@ body, .site-head, .panel, select, .search { transition: background-color 0.3s, c
   *, *::before, *::after { animation-duration: 0.01ms !important; animation-delay: 0ms !important; transition-duration: 0.01ms !important; }
 }
 .status div { max-width: 46ch; }
-.status code { background: var(--surface); border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; }
 
 /* Medium screens: slimmer panels */
 @media (max-width: 1150px) {
@@ -374,10 +364,10 @@ body, .site-head, .panel, select, .search { transition: background-color 0.3s, c
   /* An open Filters panel covers most of the map; hide the sheet behind it rather than let it show through */
   .app:has(.filters.open) :is(.area, .compare, .trends) { visibility: hidden; }
   .filters:not(.open) { overflow: visible; }   /* the closed panel is one row: let the suggestions hang below it */
-  .filters.open .filters-body, .filters.open details.about { display: flex; }
+  .filters.open .filters-body { display: flex; }
   .filters.open details.about { display: block; }
   /* One row: Fewer, the ramp, More */
-  .legend { margin-top: 0; display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 4px 8px; }
+  .legend { display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 4px 8px; }
   .legend .lab { display: none; }
   .legend .ramp { grid-area: 1 / 2; height: 7px; }
   .legend .ends { display: contents; }
@@ -390,7 +380,7 @@ body, .site-head, .panel, select, .search { transition: background-color 0.3s, c
   .sheet-handle::before { content: ""; display: block; width: 40px; height: 4px; border-radius: 2px; background: var(--faint); margin: 10px auto 0; }
   .panel.collapsed { max-height: 102px; overflow: hidden; }
   .big { font-size: 2.2rem; }
-  .cmp-grid { grid-template-columns: 1fr 1fr; gap: 8px; }   /* side by side in the bottom sheet, as before */
+  .cmp-grid { gap: 8px; }   /* still side by side in the bottom sheet */
   .cmp { padding: 10px; }
   .h2h { grid-template-columns: minmax(0, 1fr) 76px 76px; font-size: 0.8rem; }
   #map .leaflet-control-zoom { display: none; }
