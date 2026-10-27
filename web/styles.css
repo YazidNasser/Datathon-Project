@@ -55,10 +55,12 @@ a { color: var(--sea); }
 
 /* ---------------- Site header ---------------- */
 .site-head { flex: none; height: 58px; display: flex; align-items: center; gap: 14px; padding: 0 18px; background: var(--surface); border-bottom: 1px solid var(--line); position: relative; z-index: 20; }
-/* The V in the app's accent; the hotspot in its point runs up the heat map's own colours and back */
-.mark { flex: none; width: 32px; height: 32px; }
-.mark svg { display: block; width: 100%; height: 100%; }
-.mark .v { fill: var(--ink); }   /* the V in the text colour, so the heat dot is the logo's only colour */
+/* The wordmark: the V is drawn, sized to the font's capitals and sat on its baseline, so it reads as the first letter.
+   It's in the text colour, so the hotspot in its point (which runs up the heat map's colours and back) is the only colour */
+.wordmark { display: inline-flex; align-items: baseline; }
+.mark { flex: none; width: 0.74em; height: 0.72em; margin-right: -0.06em; transform: translateY(0.03em); }
+/* negative margin kerns "Va" the way the font would; the point dips just below the baseline, as pointed letters do */
+.mark .v { fill: var(--ink); }
 .mark .spot { fill: var(--ramp-3); transform-box: fill-box; transform-origin: center; animation: heat-up 4s ease-in-out infinite; }
 /* Holds cool, warms to the hottest colour as it swells a little, then cools back */
 @keyframes heat-up {
@@ -337,7 +339,7 @@ body, .site-head, .panel, select, .search { transition: background-color 0.3s, c
 /* ---------------- Phones: search on top, details in a bottom sheet ---------------- */
 @media (max-width: 760px) {
   .site-head { height: 52px; padding: 0 16px; gap: 8px; }
-  .mark, .head-search { display: none; }
+  .head-search { display: none; }
   .brand h1 { font-size: 1rem; }
   .filters-top { display: flex; }
   .views { flex: 1; justify-content: space-between; }
