@@ -201,12 +201,12 @@ details.about p { margin-top: 8px; }
 .when { font-size: 0.82rem; color: var(--muted); margin: 2px 0 12px; }
 .big { font-size: 2.6rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
 .big-label { font-size: 0.85rem; color: var(--muted); margin-top: 4px; }
-.context { font-size: 0.85rem; color: var(--muted); margin-top: 8px; max-width: 36ch; }
+.context { font-size: 0.85rem; color: var(--muted); margin-top: 8px; }
 .context b { color: var(--ink); }
 .pill { display: inline-flex; align-items: center; gap: 4px; font-size: 0.8rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; margin-top: 10px; background: var(--surface-2); color: var(--muted); }
 /* Up and down keep their arrows but stay neutral: a change in reports is context, not an alarm */
-.sec { font-size: 0.82rem; font-weight: 700; margin: 18px 0 8px; }
-.bars { display: grid; grid-template-columns: minmax(0, 120px) 1fr 52px; gap: 7px 10px; align-items: center; font-size: 0.84rem; }
+.sec { font-size: 0.82rem; font-weight: 700; margin: 14px 0 8px; }
+.bars { display: grid; grid-template-columns: minmax(0, 150px) 1fr 44px; gap: 7px 10px; align-items: center; font-size: 0.84rem; }
 .bars .n { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
 .bar { height: 8px; border-radius: 4px; background: var(--bar-bg); overflow: hidden; }
 .bar span { display: block; height: 100%; border-radius: 4px; background: var(--muted); }   /* neutral: the heat colours mean the map */
@@ -295,7 +295,7 @@ button.cmp.empty:hover { border-color: var(--muted); }
 .hbars i { flex: 1; min-height: 2px; border-radius: 2px 2px 0 0; background: var(--sea); opacity: 0.85; }
 /* The area card's smaller hour strip, like the filter's hour bars: picked hours in the accent, the rest grey,
    and every hour in a softer accent for any time */
-.hbars-sm { height: 44px; margin-top: 10px; }
+.hbars-sm { height: 38px; margin-top: 8px; }
 .hbars-sm i { background: var(--bar-bg); opacity: 1; }
 .hbars-sm i.on { background: var(--sea); }
 .hbars-sm.all-in i { background: color-mix(in srgb, var(--sea) 45%, transparent); }

@@ -977,7 +977,7 @@ function renderCompare() {
     const colour = slot === "A" ? "var(--sea)" : "var(--b)", placing = state.nextSlot === slot.toLowerCase();
     // An empty card is a button: click it to pick that area, then click the map
     if (!s) return `<button type="button" class="cmp empty${placing ? " placing" : ""}" data-action="slot-${slot.toLowerCase()}">
-      <span><b style="color:${colour}">${slot}</b> · ${placing ? `Click the map to place area ${slot}` : `Pick ${slot}, then click the map`}</span></button>`;
+      <span><b style="color:${colour}">${slot}</b> · ${placing ? `Click the map to place area ${slot}, then drag its label to move it` : `Pick ${slot}, then click the map`}</span></button>`;
     return `<div class="cmp${placing ? " placing" : ""}"><h3 class="who"><b style="background:${colour}">${slot}</b>Near ${s.name}</h3>
       <p class="big" data-count="${s.now}" data-key="${slot}">${fmt(s.now)}</p>${s.change ? `<span class="pill ${s.change.cls}" title="${s.change.text}">${s.change.text.replace("same dates ", "")}</span>` : ""}
       <p class="hint">Busiest per hour: ${busiestShort(s.buckets)}</p></div>`;
@@ -1004,7 +1004,7 @@ function renderCompare() {
       const share = (s) => new Map(s.top.map(([t, n]) => [t, n / s.now]));
       const sa = share(A), sb = share(B);
       let best = null;
-      for (const t of new Set([...sa.keys(), ...sb.keys()])) {
+      for (const [t] of rows) {   // only types in the table above, so the insight never names one it doesn't show
         const pa = sa.get(t) || 0, pb = sb.get(t) || 0, hiShare = Math.max(pa, pb), loShare = Math.min(pa, pb);
         if (hiShare < 0.06) continue;
         const r = hiShare / Math.max(loShare, 0.01);
@@ -1017,7 +1017,7 @@ function renderCompare() {
   }
   $("compare").innerHTML = `${handle}
     <div class="cmp-head"><div><h2>Compare two areas</h2>
-      <p>Within ${CONFIG.radiusMeters} m of each spot, ${periodLabel()} · ${filterLine()}. Pick A or B, then click the map or drag its label.</p></div>
+      <p>Within ${CONFIG.radiusMeters} m of each spot, ${periodLabel()} · ${filterLine()}.</p></div>
       <div class="cmp-actions">
         <div class="slot-pick" role="group" aria-label="Which area a map click places"><span>Place</span>
           <button type="button" class="ab a" data-action="slot-a" aria-pressed="${state.nextSlot === "a"}">A</button><button type="button" class="ab b" data-action="slot-b" aria-pressed="${state.nextSlot === "b"}">B</button></div>
@@ -1063,7 +1063,7 @@ function renderTrends() {
   } else second = `<p>Change</p><p>–</p><p>${ch ? ch.text : "No earlier year"}</p>`;
   const fourth = state.type === "all" && top.length
     ? `<p>Most common</p><p>${Math.round((top[0][1] / Math.max(total, 1)) * 100)}%</p><p>${top[0][0]}</p>`
-    : `<p>Busiest day</p><p>${WEEKDAYS[days.indexOf(Math.max(...days))].slice(0, 3)}</p><p>${typeLabel()}</p>`;
+    : `<p>Busiest day</p><p>${WEEKDAYS[days.indexOf(Math.max(...days))].slice(0, 3)}</p><p>${Math.round((Math.max(...days) / Math.max(total, 1)) * 100)}% of reports</p>`;
 
   const ys = state.data.years, missing = missingYears(), span = [];
   for (let y = ys[0]; y <= ys[ys.length - 1]; y++) span.push(y);
@@ -1084,7 +1084,7 @@ function renderTrends() {
     <div class="metrics">
       <div class="metric"><p>Per day</p><p>${fmt(Math.round(total / daysIn(sel)))}</p><p>${fmt(total)} ${sel.length === 1 && isPartial(sel[0]) ? `from Jan 1 to ${throughLabel()}` : `over ${sel.length} year${sel.length !== 1 ? "s" : ""}`}</p></div>
       <div class="metric">${second}</div>
-      <div class="metric"><p>Busiest hour</p><p>${total ? fmtHour(peakHour) : "–"}</p><p>Across the city</p></div>
+      <div class="metric"><p>Busiest hour</p><p>${total ? fmtHour(peakHour) : "–"}</p><p>${total ? `${Math.round((hours[peakHour] / Math.max(1, hours.reduce((a, b) => a + b, 0))) * 100)}% of reports` : "No times recorded"}</p></div>
       <div class="metric">${fourth}</div>
     </div>
     <div class="tsec"><h3>Year by year</h3>
