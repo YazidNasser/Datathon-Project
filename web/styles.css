@@ -58,7 +58,7 @@ a { color: var(--sea); }
 /* The V in the app's accent; the hotspot in its point runs up the heat map's own colours and back */
 .mark { flex: none; width: 32px; height: 32px; }
 .mark svg { display: block; width: 100%; height: 100%; }
-.mark .v { fill: var(--sea); }
+.mark .v { fill: var(--ink); }   /* the V in the text colour, so the heat dot is the logo's only colour */
 .mark .spot { fill: var(--ramp-3); transform-box: fill-box; transform-origin: center; animation: heat-up 4s ease-in-out infinite; }
 /* Holds cool, warms to the hottest colour as it swells a little, then cools back */
 @keyframes heat-up {
