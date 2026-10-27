@@ -499,8 +499,8 @@ function syncTimeButtons() {
       btn.disabled = !state.hours;
       continue;
     }
-    // Any time is the whole day, so all four parts show as picked (like every year under "All years")
-    const hs = blockHours(btn.dataset.time), n = state.hours ? hs.filter((h) => state.hours.has(h)).length : hs.length;
+    // Any time includes every part without picking one (like the years under "All years"): a tap picks just that part
+    const hs = blockHours(btn.dataset.time), n = state.hours ? hs.filter((h) => state.hours.has(h)).length : 0;
     btn.setAttribute("aria-pressed", n === hs.length ? "true" : n ? "mixed" : "false");
   }
 }
@@ -1044,8 +1044,8 @@ function renderTrends() {
         : `<i class="${state.years.has(y) ? "on" : ""} ${isPartial(y) ? "part" : ""}" style="height:${((perYear.get(y) || 0) / maxY) * 100}%;--i:${i}" title="${y}: ${fmt(perYear.get(y) || 0)}"></i>`}<span>${String(y).slice(2)}</span></div>`).join("")}</div>
       <p class="hint">Coloured bars are the years you've selected.${missing.length ? ` No data for ${missing.join(", ")}.` : ""}${state.data.partialYear ? ` ${state.data.partialYear} runs to ${throughLabel()}.` : ""}</p></div>
     <div class="tsec"><h3>Hour of the day</h3>
-      <div class="hbars">${hours.map((n, h) => `<i style="height:${(n / maxH) * 100}%;--i:${h}" title="${fmtHour(h)}: ${fmt(n)}"></i>`).join("")}</div>
-      <div class="hbars-x"><span>12 am</span><span>6 am</span><span>12 pm</span><span>6 pm</span><span>11 pm</span></div></div>
+      <div class="hbars">${TRACK_ORDER.map((h, i) => `<i style="height:${(hours[h] / maxH) * 100}%;--i:${i}" title="${fmtHour(h)}: ${fmt(hours[h])}"></i>`).join("")}</div>
+      <div class="hbars-x"><span>6 am</span><span>12 pm</span><span>6 pm</span><span>12 am</span><span>6 am</span></div></div>
     ${state.type === "all" ? `<div class="tsec"><h3>Most common</h3>${typeBars(top, 6)}</div>` : ""}
     ${areaHtml}`;
 }
@@ -1233,9 +1233,11 @@ function syncYearButtons() {
   const all = allSelected() && state.data.years.length > 1;
   for (const btn of document.querySelectorAll("#years button")) {
     if (btn.dataset.year === "none") { btn.hidden = !state.years.size; continue; }
-    const on = btn.dataset.year === "all" ? all : state.years.has(Number(btn.dataset.year));
+    // Under "All years" each year is included but not picked: a tap picks just that year, so it isn't "pressed"
+    const on = btn.dataset.year === "all" ? all : !all && state.years.has(Number(btn.dataset.year));
     btn.setAttribute("aria-pressed", String(on));
   }
+  $("years").classList.toggle("all-in", all);
 }
 
 function refresh() {
