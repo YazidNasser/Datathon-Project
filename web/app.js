@@ -451,10 +451,14 @@ function busiestTime(buckets) {
     .sort((a, b) => b[1] - a[1]);
   return first[1] >= second[1] * CLEAR_LEAD ? first[0] : null;
 }
+// The parts of the day as tiles, styled like the Time of day filter: the picked parts in its grey pill, a part with
+// only some hours picked underlined, the rest faded. The busiest part says so in words, not in the "picked" colour.
 function timeTiles(buckets) {
   const top = busiestTime(buckets);
-  return `<div class="tiles">${Object.keys(IN_BUCKET).map((k) =>
-    `<div class="${k === top ? "top" : ""}"><p>${cap(k)}</p><p>${fmt(buckets[k])}</p></div>`).join("")}</div>`;
+  return `<div class="tiles${state.hours ? "" : " all-in"}">${Object.keys(IN_BUCKET).map((k) => {
+    const n = state.hours ? blockHours(k).filter((h) => state.hours.has(h)).length : 0;
+    return `<div class="${n === 6 ? "on" : n ? "some" : ""}"><p>${cap(k)}</p><p>${fmt(buckets[k])}</p>${k === top ? `<p class="tag">Busiest</p>` : ""}</div>`;
+  }).join("")}</div>`;
 }
 // One line that makes the per-hour comparison readable without new units
 function busiestLine(buckets) {
@@ -469,11 +473,12 @@ function busiestShort(buckets) {
   if (!total) return "–";
   return top ?? (total < MIN_FOR_BUSIEST ? "too few to tell" : "no clear peak");
 }
-// The area card's bar per hour; the busiest part's hours in the accent colour
-function hourStrip(hours, buckets) {
-  const max = Math.max(1, ...hours), top = busiestTime(buckets);
-  return `<div class="hbars hbars-sm">${TRACK_ORDER.map((h, i) =>
-    `<i class="${top && IN_BUCKET[top](h) ? "on" : ""}" style="height:${(hours[h] / max) * 100}%;--i:${i}" title="${fmtHour(h)}: ${fmt(hours[h])}"></i>`).join("")}</div>
+// The area card's bar per hour, coloured like the filter's hour bars: the picked hours in the accent, or every hour
+// in a softer accent for any time
+function hourStrip(hours) {
+  const max = Math.max(1, ...hours);
+  return `<div class="hbars hbars-sm${state.hours ? "" : " all-in"}">${TRACK_ORDER.map((h, i) =>
+    `<i class="${state.hours?.has(h) ? "on" : ""}" style="height:${(hours[h] / max) * 100}%;--i:${i}" title="${fmtHour(h)}: ${fmt(hours[h])}"></i>`).join("")}</div>
     <div class="hbars-x"><span>6 am</span><span>12 pm</span><span>6 pm</span><span>12 am</span><span>6 am</span></div>`;
 }
 
@@ -762,14 +767,25 @@ function typeBars(top, count = 4) {
   return `<div class="bars">${top.slice(0, count).map(([t, n], i) =>
     `<span>${t}</span><div class="bar"><span style="width:${(n / max) * 100}%;--i:${i}"></span></div><span class="n">${fmt(n)}</span>`).join("")}</div>`;
 }
+// One year's bar. The year in progress is drawn as a dashed outline at its full-year pace (the rate so far, over
+// 365 days) with the count so far filled in at the bottom, so it doesn't read as a drop against whole years.
+const fullYearPace = (y, n) => (isPartial(y) ? n * yearWeight(y) : n);
+function yearBar(y, n, max, i) {
+  const on = state.years.has(y) ? "on" : "";
+  if (!isPartial(y)) return `<i class="${on}" style="height:${(n / max) * 100}%;--i:${i}" title="${y}: ${fmt(n)}"></i>`;
+  const pace = fullYearPace(y, n);
+  return `<i class="part ${on}" style="height:${(pace / max) * 100}%;--i:${i}" title="${y}: ${fmt(n)} to ${throughLabel()}, about ${fmt(Math.round(pace))} at this pace for the whole year"><b style="height:${pace ? (n / pace) * 100 : 0}%"></b></i>`;
+}
+const paceNote = () => `${state.data.partialYear} is Jan 1 to ${throughLabel()}; the dashed outline is its pace for a full year.`;
 function yearSpark(perYear) {
   const ys = state.data.years, first = ys[0], last = ys[ys.length - 1], missing = missingYears();
   const span = []; for (let y = first; y <= last; y++) span.push(y);
-  const max = Math.max(1, ...span.map((y) => perYear.get(y) || 0));
+  const max = Math.max(1, ...span.map((y) => fullYearPace(y, perYear.get(y) || 0)));
   return `<div class="spark">${span.map((y, i) => missing.includes(y)
     ? `<i class="gap" title="No ${y} data"></i>`
-    : `<i class="${state.years.has(y) ? "on" : ""} ${isPartial(y) ? "part" : ""}" style="height:${((perYear.get(y) || 0) / max) * 100}%;--i:${i}" title="${y}: ${fmt(perYear.get(y) || 0)}"></i>`).join("")}</div>
-    <div class="spark-x"><span>${first}</span>${missing.length ? `<span>${missing.join(", ")} no data</span>` : ""}<span>${last}${state.data.partialYear === last ? " to date" : ""}</span></div>`;
+    : yearBar(y, perYear.get(y) || 0, max, i)).join("")}</div>
+    <div class="spark-x"><span>${first}</span>${missing.length ? `<span>${missing.join(", ")} no data</span>` : ""}<span>${last}</span></div>
+    ${state.data.partialYear ? `<p class="hint">${paceNote()}</p>` : ""}`;
 }
 // A tip says a crime "is common here", so only give one where that's true compared with the city: a bigger share
 // of this area's reports than of the city's, or, with one type picked, clearly more of it than an average area
@@ -867,7 +883,7 @@ function renderArea() {
     ${s.now ? cityLine(s.vsCity) : ""}
     ${s.change ? `<span class="pill ${s.change.cls}">${s.change.text}</span>` : ""}
     ${state.type === "all" ? `<h3 class="sec">Most common here</h3>${typeBars(s.top)}` : ""}
-    <h3 class="sec">When they happen</h3>${timeTiles(s.buckets)}${busiestLine(s.buckets)}${periodTotal(s.buckets) ? hourStrip(s.hours, s.buckets) : ""}
+    <h3 class="sec">When they happen</h3>${timeTiles(s.buckets)}${busiestLine(s.buckets)}${periodTotal(s.buckets) ? hourStrip(s.hours) : ""}
     ${s.unknownHour ? `<p class="hint">${fmt(s.unknownHour)} with no time recorded</p>` : ""}
     <h3 class="sec">Year by year</h3>${yearSpark(s.perYear)}
     ${tip ? `<div class="tip">${ICON_BULB}<span>${tip}</span></div>` : ""}
@@ -1023,7 +1039,7 @@ function renderTrends() {
 
   const ys = state.data.years, missing = missingYears(), span = [];
   for (let y = ys[0]; y <= ys[ys.length - 1]; y++) span.push(y);
-  const maxY = Math.max(1, ...span.map((y) => perYear.get(y) || 0));
+  const maxY = Math.max(1, ...span.map((y) => fullYearPace(y, perYear.get(y) || 0)));
   const maxH = Math.max(1, ...hours);
 
   let areaHtml = "";
@@ -1046,8 +1062,8 @@ function renderTrends() {
     <div class="tsec"><h3>Year by year</h3>
       <div class="ybars">${span.map((y, i) => `<div>${missing.includes(y)
         ? `<i class="gap" style="height:30%" title="No ${y} data"></i>`
-        : `<i class="${state.years.has(y) ? "on" : ""} ${isPartial(y) ? "part" : ""}" style="height:${((perYear.get(y) || 0) / maxY) * 100}%;--i:${i}" title="${y}: ${fmt(perYear.get(y) || 0)}"></i>`}<span>${String(y).slice(2)}</span></div>`).join("")}</div>
-      <p class="hint">Coloured bars are the years you've selected.${missing.length ? ` No data for ${missing.join(", ")}.` : ""}${state.data.partialYear ? ` ${state.data.partialYear} runs to ${throughLabel()}.` : ""}</p></div>
+        : yearBar(y, perYear.get(y) || 0, maxY, i)}<span>${String(y).slice(2)}</span></div>`).join("")}</div>
+      <p class="hint">Coloured bars are the years you've selected.${missing.length ? ` No data for ${missing.join(", ")}.` : ""}${state.data.partialYear ? ` ${paceNote()}` : ""}</p></div>
     <div class="tsec"><h3>Hour of the day</h3>
       <div class="hbars">${TRACK_ORDER.map((h, i) => `<i style="height:${(hours[h] / maxH) * 100}%;--i:${i}" title="${fmtHour(h)}: ${fmt(hours[h])}"></i>`).join("")}</div>
       <div class="hbars-x"><span>6 am</span><span>12 pm</span><span>6 pm</span><span>12 am</span><span>6 am</span></div></div>
