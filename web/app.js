@@ -170,7 +170,8 @@ function addCoverageMask(points) {
     }
   }
 
-  coverage = { field, rows, cols, idx, SW, NE, dLat, dLng };
+  const km2 = field.filter((v) => v <= 0.5).length * (SHADE.cellMeters / 1000) ** 2;   // the land the data covers
+  coverage = { field, rows, cols, idx, SW, NE, dLat, dLng, km2 };
   paintCoverage();
 }
 
@@ -485,6 +486,9 @@ function drawTrackBars() {
     bar.setAttribute("aria-pressed", String(!!state.hours?.has(h)));   // blue only for hours you picked; grey for any time
     bar.title = `${fmtHour(h)}: ${fmt(hours[h])} reports`;
   }
+  // One Tab stop for the 24 hours (the focused one, else the first picked, else 6 am); arrows move between them
+  const stop = strip.contains(document.activeElement) ? document.activeElement : strip.querySelector('[aria-pressed="true"]') || strip.firstChild;
+  for (const bar of strip.children) bar.tabIndex = bar === stop ? 0 : -1;
   return hours;
 }
 function syncTimeButtons() {
@@ -546,6 +550,15 @@ function bindTimeControls() {
     setHours(paintSet);
     refresh();
   });
+  strip.addEventListener("keydown", (e) => {
+    const bars = [...strip.children], i = bars.indexOf(document.activeElement);
+    const to = { ArrowRight: i + 1, ArrowDown: i + 1, ArrowLeft: i - 1, ArrowUp: i - 1, Home: 0, End: bars.length - 1 }[e.key];
+    if (i < 0 || to === undefined) return;
+    e.preventDefault();
+    const next = bars[(to + bars.length) % bars.length];
+    for (const b of bars) b.tabIndex = b === next ? 0 : -1;
+    next.focus();
+  });
   // Keyboard (Enter or Space on a bar) arrives as a click with no pointer
   strip.addEventListener("click", (e) => {
     const bar = e.target.closest("[data-hour]");
@@ -590,7 +603,11 @@ function spotsPerYear(test, years, scale = 1) {
 
 function updateHeat() {
   const n = state.shown.years.size;
-  const count = n ? state.data.points.filter((p) => matches(p, state.shown)).length : 0;
+  // City-wide totals for the current filters, overall and per crime type, for the area card's comparisons
+  let count = 0;
+  const cityTypes = new Map();
+  if (n) for (const p of state.data.points) if (matches(p, state.shown)) { count++; cityTypes.set(p[TYPE], (cityTypes.get(p[TYPE]) || 0) + 1); }
+  state.city = { count, types: cityTypes };
   // A part of the day is drawn per hour (scaled up by 24 / its hours) against the all-day reference, so a part
   // exactly as busy per hour as the whole day looks like "Any time"; busier parts glow more, quieter ones less.
   const hrs = state.hours ? state.hours.size : 0;   // 0 for "Any time"
@@ -727,8 +744,10 @@ function areaStats(ll) {
     now++;
     types.set(p[TYPE], (types.get(p[TYPE]) || 0) + 1);
   }
-  const top = [...types.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]).map(([t, n]) => [state.data.types[t].label, n]);
-  return { name: nearestHood(ll), now, before, change: changeInfo(now, before), top, buckets: partCounts(hours), hours, unknownHour, perYear };
+  const sorted = [...types.entries()].sort((a, b) => b[1] - a[1] || a[0] - b[0]);
+  const top = sorted.map(([t, n]) => [state.data.types[t].label, n]);
+  return { name: nearestHood(ll), now, before, change: changeInfo(now, before), top, typeIds: sorted.map(([t]) => t),
+    buckets: partCounts(hours), hours, unknownHour, perYear, vsCity: vsCity(now) };
 }
 
 // Small HTML pieces
@@ -747,11 +766,29 @@ function yearSpark(perYear) {
     : `<i class="${state.years.has(y) ? "on" : ""} ${isPartial(y) ? "part" : ""}" style="height:${((perYear.get(y) || 0) / max) * 100}%;--i:${i}" title="${y}: ${fmt(perYear.get(y) || 0)}"></i>`).join("")}</div>
     <div class="spark-x"><span>${first}</span>${missing.length ? `<span>${missing.join(", ")} no data</span>` : ""}<span>${last}${state.data.partialYear === last ? "*" : ""}</span></div>`;
 }
-function tipFor(top) {
-  if (state.type !== "all") return TIPS[typeLabel()] || "";
-  const names = top.slice(0, 3).map(([t]) => t);
-  for (const t of ["Bike theft", "Theft from cars", "Home break-ins", "Car theft"]) if (names.includes(t)) return TIPS[t];
-  return names.length ? TIPS[names[0]] || "" : "";
+// A tip says a crime "is common here", so only give one where that's true compared with the city: a bigger share
+// of this area's reports than of the city's, or, with one type picked, clearly more of it than an average area
+function tipFor(s) {
+  if (state.type !== "all") return s.vsCity > 1.5 ? TIPS[typeLabel()] || "" : "";
+  const city = state.city?.count;
+  const over = (i) => !!city && s.top[i][1] / s.now > (state.city.types.get(s.typeIds[i]) || 0) / city;
+  for (const t of ["Bike theft", "Theft from cars", "Home break-ins", "Car theft"]) {
+    const i = s.top.slice(0, 3).findIndex(([name]) => name === t);
+    if (i >= 0 && over(i)) return TIPS[t];
+  }
+  return s.top.length && over(0) ? TIPS[s.top[0][0]] || "" : "";
+}
+// This area against the city average for a circle of the same size (null when that can't be worked out)
+function vsCity(now) {
+  if (!coverage?.km2 || !state.city?.count) return null;
+  return now / ((state.city.count * Math.PI * (CONFIG.radiusMeters / 1000) ** 2) / coverage.km2);
+}
+function cityLine(r) {
+  if (r == null) return "";
+  const size = `for a ${CONFIG.radiusMeters} m circle`;
+  if (r > 1.5) return `<p class="context"><b>About ${r < 10 ? r.toFixed(1) : Math.round(r)}× the city average</b> ${size}. Busy areas show more because more people are there.</p>`;
+  if (r < 0.67) return `<p class="context"><b>Below the city average</b> ${size} (about ${r < 0.1 ? "a tenth" : `${r.toFixed(1)}×`}).</p>`;
+  return `<p class="context"><b>About the city average</b> ${size}.</p>`;
 }
 const blurredNote = () => {
   const blurred = state.type === "all" ? state.data.types.some((t) => t.blurred) : state.data.types[state.type].blurred;
@@ -809,27 +846,28 @@ function renderArea() {
   if (!state.selected) { $("area").innerHTML = ""; return; }
   if (noYears()) {
     $("area").innerHTML = `${handle}
-      <div class="card-head"><div><p class="place">Near ${nearestHood(state.selected)}</p>
+      <div class="card-head"><div><h2 class="place" tabindex="-1">Near ${nearestHood(state.selected)}</h2>
         <p class="when">Within ${CONFIG.radiusMeters} m</p></div>
         <button type="button" class="x" data-action="clear" aria-label="Close area summary">${ICON_X}</button></div>${pickYear}`;
     return;
   }
   const s = areaStats(state.selected);
-  const tip = s.now ? tipFor(s.top) : "";
+  const tip = s.now ? tipFor(s) : "";
   $("area").innerHTML = `${handle}
-    <div class="card-head"><div><p class="place">Near ${s.name}</p>
+    <div class="card-head"><div><h2 class="place" tabindex="-1">Near ${s.name}</h2>
       <p class="when">Within ${CONFIG.radiusMeters} m · ${periodLabel()}</p></div>
       <button type="button" class="x" data-action="clear" aria-label="Close area summary">${ICON_X}</button></div>
     <p class="big" data-count="${s.now}" data-key="area">${fmt(s.now)}</p>
     <p class="big-label">reported incidents · ${filterLine()}</p>
+    ${s.now ? cityLine(s.vsCity) : ""}
     ${s.change ? `<span class="pill ${s.change.cls}">${s.change.text}</span>` : ""}
-    ${state.type === "all" ? `<p class="sec">Most common here</p>${typeBars(s.top)}` : ""}
-    <p class="sec">When they happen</p>${timeTiles(s.buckets)}${busiestLine(s.buckets)}${periodTotal(s.buckets) ? hourStrip(s.hours, s.buckets) : ""}
+    ${state.type === "all" ? `<h3 class="sec">Most common here</h3>${typeBars(s.top)}` : ""}
+    <h3 class="sec">When they happen</h3>${timeTiles(s.buckets)}${busiestLine(s.buckets)}${periodTotal(s.buckets) ? hourStrip(s.hours, s.buckets) : ""}
     ${s.unknownHour ? `<p class="hint">${fmt(s.unknownHour)} with no time recorded</p>` : ""}
-    <p class="sec">Year by year</p>${yearSpark(s.perYear)}
+    <h3 class="sec">Year by year</h3>${yearSpark(s.perYear)}
     ${tip ? `<div class="tip">${ICON_BULB}<span>${tip}</span></div>` : ""}
     ${blurredNote()}
-    <p class="foot">Awareness, not a safety score. Busy areas show more because more people are there.</p>`;
+    <p class="foot">Awareness, not a safety score for any address.</p>`;
 }
 
 function selectPoint(ll) {
@@ -839,6 +877,14 @@ function selectPoint(ll) {
   growCircle(areaCircle);
   enter($("area"));
   renderPanels();
+  $("area").querySelector(".place")?.focus({ preventScroll: true });
+  announce($("area").querySelector(".place")?.textContent, $("area").querySelector(".big")?.dataset.count, $("area").querySelector(".context")?.textContent);
+}
+// One short sentence for screen readers when something is placed; the panels themselves aren't live regions,
+// so a filter change doesn't re-read a whole card
+function announce(place, count, extra = "") {
+  if (!place) return;
+  $("announce").textContent = `${place}: ${count != null ? `${fmt(Number(count))} reported incidents. ` : ""}${extra}`;
 }
 
 // ---------------------------------------------------------------------
@@ -853,6 +899,8 @@ function setCompareSpot(ll) {
   syncCircles();
   growCircle(slot === "a" ? circleA : circleB);
   renderPanels();
+  const card = $("compare").querySelector(`[data-key="${slot.toUpperCase()}"]`);
+  announce(`Area ${slot.toUpperCase()} placed near ${nearestHood(ll)}`, card?.dataset.count);
 }
 function pickSlot(slot) {
   state.nextSlot = slot;
@@ -881,7 +929,7 @@ function renderCompare() {
     // An empty card is a button: click it to pick that area, then click the map
     if (!s) return `<button type="button" class="cmp empty${placing ? " placing" : ""}" data-action="slot-${slot.toLowerCase()}">
       <span><b style="color:${colour}">${slot}</b> · ${placing ? `Click the map to place area ${slot}` : `Pick ${slot}, then click the map`}</span></button>`;
-    return `<div class="cmp${placing ? " placing" : ""}"><p class="who"><b style="background:${colour}">${slot}</b>Near ${s.name}</p>
+    return `<div class="cmp${placing ? " placing" : ""}"><h3 class="who"><b style="background:${colour}">${slot}</b>Near ${s.name}</h3>
       <p class="big" data-count="${s.now}" data-key="${slot}">${fmt(s.now)}</p>${s.change ? `<span class="pill ${s.change.cls}">${s.change.text}</span>` : ""}
       <p class="hint">Busiest per hour: ${busiestShort(s.buckets)}</p></div>`;
   };
@@ -892,7 +940,7 @@ function renderCompare() {
   const rows = state.type === "all"
     ? [...new Set([...(A?.top || []).slice(0, 3), ...(B?.top || []).slice(0, 3)].map(([t]) => t))].map((t) => [t, countOf(A, t), countOf(B, t)])
     : Object.keys(IN_BUCKET).map((k) => [cap(k), A?.buckets[k] || 0, B?.buckets[k] || 0]);
-  const table = A || B ? `<div class="h2h"><p class="sec">${state.type === "all" ? "Most common" : "By time of day"}</p><b>A</b><b>B</b>
+  const table = A || B ? `<div class="h2h"><h3 class="sec">${state.type === "all" ? "Most common" : "By time of day"}</h3><b>A</b><b>B</b>
     ${rows.map(([t, a, b]) => `<span>${t}</span>${cell(A, a)}${cell(B, b)}`).join("")}</div>` : "";
   let insight = "";
   if (A && B && (A.now || B.now)) {
@@ -913,7 +961,7 @@ function renderCompare() {
         const r = hiShare / Math.max(loShare, 0.01);
         if (r >= 1.6 && (!best || r > best.r)) best = { t, r, where: pa > pb ? "A" : "B", pa, pb };
       }
-      if (best) parts.push(`${best.t} is a bigger share at ${best.where} (${Math.round(best.where === "A" ? best.pa * 100 : best.pb * 100)}% vs ${Math.round(best.where === "A" ? best.pb * 100 : best.pa * 100)}%).`);
+      if (best) parts.unshift(`${best.t} is a bigger share at ${best.where} (${Math.round(best.where === "A" ? best.pa * 100 : best.pb * 100)}% vs ${Math.round(best.where === "A" ? best.pb * 100 : best.pa * 100)}%).`);
     }
     parts.push("Busier spots usually have more people, shops and transit, so they get more reports.");
     insight = `<div class="tip">${ICON_INFO}<span>${parts.join(" ")}</span></div>`;
@@ -1214,6 +1262,7 @@ function renderAbout() {
     <p>Far more reports are timed at midnight than at 1 am, which usually means some incidents with no exact time are recorded as 12 am. Overnight counts may run a little high.</p>`;
   const p = d.partialYear;
   const full = state.shown.years.has(p) ? `${p} scaled to a full year` : "";
+  $("legend-note").hidden = state.type === "all";
   $("legend-title").textContent = state.hours
     ? `${cap(timeLabel())}, per hour${full ? `; ${full}` : ""}`
     : full ? `Per year, ${full}` : "Incidents per year";

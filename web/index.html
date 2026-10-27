@@ -79,7 +79,7 @@
             <button type="button" data-time="afternoon" aria-pressed="false" aria-label="Afternoon, 12 pm to 6 pm">Afternoon</button>
             <button type="button" data-time="evening" aria-pressed="false" aria-label="Evening, 6 pm to 12 am">Evening</button>
             <button type="button" data-time="overnight" aria-pressed="false" aria-label="Overnight, 12 am to 6 am">Overnight</button>
-            <div class="track-bars" id="track-bars" role="group" aria-label="Hours of the day: click or drag across them to pick hours"></div>
+            <div class="track-bars" id="track-bars" role="group" aria-label="Hours of the day: click or drag across them to pick hours, or use the arrow keys and Enter"></div>
             <span class="tick" aria-hidden="true">6 am</span><span class="tick" aria-hidden="true">12 pm</span><span class="tick" aria-hidden="true">6 pm</span><span class="tick" aria-hidden="true">12 am</span>
           </div>
         </fieldset>
@@ -90,16 +90,18 @@
         <span class="lab" id="legend-title">Reported incidents</span>
         <div class="ramp"></div>
         <div class="ends"><span>Fewer</span><span>More</span></div>
+        <p class="legend-note" id="legend-note" hidden>One type is shaded on the all-crime scale, so it looks lighter than all types together.</p>
       </div>
       <details class="about" id="about"><summary>About this data</summary><div id="about-body"></div></details>
     </aside>
 
-    <aside class="panel area" id="area" aria-live="polite" aria-label="Area summary"></aside>
-    <aside class="panel compare" id="compare" aria-live="polite" aria-label="Compare two areas"></aside>
+    <aside class="panel area" id="area" aria-label="Area summary"></aside>
+    <aside class="panel compare" id="compare" aria-label="Compare two areas"></aside>
     <aside class="panel trends" id="trends" aria-label="Trends"></aside>
 
     <div class="status show" id="status"><div><span class="spinner"></span>Loading crime data…</div></div>
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <p class="sr-only" id="announce" aria-live="polite"></p>
   </div>
 
   <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.js" integrity="sha384-cxOPjt7s7Iz04uaHJceBmS+qpjv2JkIHNVcuOrM+YHwZOmJGBXI00mdUXEq65HTH" crossorigin="anonymous"></script>

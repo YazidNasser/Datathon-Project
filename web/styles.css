@@ -4,7 +4,7 @@
 :root {
   --ink: #16242b;          /* main text */
   --muted: #566a74;        /* secondary text */
-  --faint: #82939a;        /* hints and captions */
+  --faint: #627379;        /* hints and captions: still 4.5:1 on white and on tiles */
   --line: #dbe2e5;         /* borders */
   --page: #eef2f3;         /* behind the panels */
   --surface: #ffffff;      /* panels and cards */
@@ -31,7 +31,7 @@
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 :root[data-theme="dark"] {
-  --ink: #e4ecef; --muted: #a0b2b9; --faint: #74868d; --line: #2b3a41;
+  --ink: #e4ecef; --muted: #a0b2b9; --faint: #8a9ca3; --line: #2b3a41;
   --page: #0e161a; --surface: #172227; --surface-2: #1f2c32;
   --sea: #4fb6d8; --sea-soft: #15343f; --on-sea: #06212b; --b: #b893ec;
   --up: #f2907a; --up-soft: #3b1f17; --down: #72d29c; --down-soft: #14301f;
@@ -48,6 +48,8 @@ html { height: 100%; }
 body { margin: 0; height: 100%; display: flex; flex-direction: column; font: 15px/1.45 var(--font); color: var(--ink); background: var(--page); }
 button, input, select { font: inherit; color: inherit; }
 h1, h2, h3, p { margin: 0; }
+.sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.place:focus { outline: none; }   /* focused by script after a pick, to move screen readers there; not a control */
 a { color: var(--sea); }
 :focus-visible { outline: 3px solid var(--sea); outline-offset: 2px; }
 
@@ -123,6 +125,7 @@ a { color: var(--sea); }
 .filters-top { display: none; gap: 8px; }   /* only used on phones (search and Filters button) */
 .search { flex: 1; min-width: 0; display: flex; align-items: center; gap: 8px; height: 42px; padding: 0 12px; background: var(--surface-2); border: 1px solid var(--line); border-radius: 10px; }
 .search:focus-within { border-color: var(--sea); }
+.search input::placeholder { color: var(--faint); opacity: 1; }   /* the browser's own grey was 3.1:1 on dark */
 .search svg { flex: none; width: 17px; height: 17px; color: var(--faint); }
 .search input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font-size: 0.95rem; }
 /* The neighbourhood suggestions: always directly under the search box. It floats, so it is the one thing with a shadow. */
@@ -178,6 +181,7 @@ select { width: 100%; height: 40px; background: var(--surface); border: 1px soli
 .citywide .share { display: block; margin-top: 6px; color: var(--ink); }
 .legend .ramp { height: 9px; /* taste-skill-ignore: the legend swatch is the heat map's own colour ramp */ border-radius: 5px; background: linear-gradient(90deg, var(--ramp-1), var(--ramp-2), var(--ramp-3), var(--ramp-4), var(--ramp-5)); }
 .legend .ends { display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--faint); margin-top: 3px; }
+.legend-note { font-size: 0.78rem; color: var(--muted); margin-top: 6px; }
 .legend .lab { font-weight: 400; color: var(--muted); font-size: 0.8rem; }
 details.about { font-size: 0.8125rem; color: var(--muted); border-top: 1px solid var(--line); padding-top: 12px; }
 details.about summary { cursor: pointer; font-weight: 700; color: var(--ink); font-size: 0.82rem; }
@@ -188,9 +192,10 @@ details.about p { margin-top: 8px; }
 .when { font-size: 0.82rem; color: var(--muted); margin: 2px 0 12px; }
 .big { font-size: 2.6rem; font-weight: 700; letter-spacing: -0.02em; line-height: 1; font-variant-numeric: tabular-nums; }
 .big-label { font-size: 0.85rem; color: var(--muted); margin-top: 4px; }
+.context { font-size: 0.85rem; color: var(--muted); margin-top: 8px; max-width: 36ch; }
+.context b { color: var(--ink); }
 .pill { display: inline-flex; align-items: center; gap: 4px; font-size: 0.8rem; font-weight: 700; padding: 3px 10px; border-radius: 999px; margin-top: 10px; background: var(--surface-2); color: var(--muted); }
-.pill.up { background: var(--up-soft); color: var(--up); }
-.pill.down { background: var(--down-soft); color: var(--down); }
+/* Up and down keep their arrows but stay neutral: a change in reports is context, not an alarm */
 .sec { font-size: 0.82rem; font-weight: 700; margin: 18px 0 8px; }
 .bars { display: grid; grid-template-columns: minmax(0, 120px) 1fr 52px; gap: 7px 10px; align-items: center; font-size: 0.84rem; }
 .bars .n { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
@@ -259,7 +264,7 @@ button.cmp.empty:hover { border-color: var(--muted); }
 .metric p:first-child { font-size: 0.8rem; color: var(--muted); }
 .metric p:nth-child(2) { font-size: 1.45rem; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; line-height: 1.25; }
 .metric p:nth-child(3) { font-size: 0.8rem; color: var(--faint); }
-.metric .up { color: var(--up); } .metric .down { color: var(--down); }
+.metric .up, .metric .down { color: var(--ink); }   /* neutral, like the change pills */
 .tsec { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 14px; }
 .tsec h3 { font-size: 0.88rem; font-weight: 700; margin-bottom: 10px; }
 .ybars { display: flex; align-items: flex-end; gap: 5px; height: 120px; }
