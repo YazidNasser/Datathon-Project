@@ -77,6 +77,11 @@ const ICON_X = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strok
 // ---------------------------------------------------------------------
 // Step 1: the base map of Vancouver
 // ---------------------------------------------------------------------
+// Leaflet and leaflet.heat come from CDNs: if either didn't load, say so instead of showing "Loading" forever
+if (!window.L?.heatLayer) {
+  showError("couldn't load Leaflet or leaflet.heat from the CDN (see the script tags in index.html).");
+  throw new Error("VanScene: map scripts didn't load");
+}
 const map = L.map("map", {
   minZoom: CONFIG.minZoom, maxZoom: CONFIG.maxZoom, zoomControl: false,
   // Quarter steps: whole steps made the opening view round down to half size whenever the city
@@ -1118,7 +1123,9 @@ function trendMetrics({ total, before, perYear, top, hours, days }) {
   } else second = `<p>Change</p><p>–</p><p>${ch ? ch.text : "No earlier year"}</p>`;
   const fourth = state.type === "all" && top.length
     ? `<p>Most common</p><p>${Math.round((top[0][1] / Math.max(total, 1)) * 100)}%</p><p>${top[0][0]}</p>`
-    : `<p>Busiest day</p><p>${WEEKDAYS[days.indexOf(Math.max(...days))].slice(0, 3)}</p><p>${Math.round((Math.max(...days) / Math.max(total, 1)) * 100)}% of reports</p>`;
+    : total
+      ? `<p>Busiest day</p><p>${WEEKDAYS[days.indexOf(Math.max(...days))].slice(0, 3)}</p><p>${Math.round((Math.max(...days) / total) * 100)}% of reports</p>`
+      : `<p>Busiest day</p><p>–</p><p>No reports</p>`;
   return `<div class="metrics">
       <div class="metric"><p>Per day</p><p>${fmt(Math.round(total / daysIn(sel)))}</p><p>${fmt(total)} ${sel.length === 1 && isPartial(sel[0]) ? `from Jan 1 to ${throughLabel()}` : `over ${sel.length} year${sel.length !== 1 ? "s" : ""}`}</p></div>
       <div class="metric">${second}</div>
@@ -1422,7 +1429,11 @@ function showError(devHint) {
 
 // Header buttons: views and theme
 for (const b of document.querySelectorAll(".views button")) {
-  b.addEventListener("click", () => { if (state.data) setView(b.dataset.view); });
+  b.addEventListener("click", () => {
+    if (!state.data) return;
+    if (isPhone()) closeFilters();   // the open filters hide every view panel, so the tap would look like it did nothing
+    setView(b.dataset.view);
+  });
 }
 // The search lives in the header, except on phones where the header has no room and it joins the Filters row
 function placeSearch() {
