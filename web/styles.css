@@ -58,17 +58,20 @@ a { color: var(--sea); }
 .wordmark { display: inline-flex; align-items: center; gap: 0.32em; }
 .mark { flex: none; width: 1.3em; height: 1.3em; overflow: visible; }
 .mark .v { fill: var(--ink); }
-/* Every 2 s the pin heats up like a hotspot on the map: it warms to the next colour of the heat ramp
-   while a blurred copy behind it glows, then both cool back */
-.mark .spot { fill: var(--ramp-3); animation: heat-up 2s ease-in-out infinite; }
-.mark .glow { fill: var(--ramp-4); opacity: 0; filter: url(#mark-glow); animation: glow 2s ease-in-out infinite; }
+/* About every 8 s the pin warms a little, partway to the next colour of the heat ramp, while a faint blurred copy
+   behind it glows: a quick swell, a slow fade, then a long rest so it never competes with the map.
+   The first pulse comes a moment after the page settles */
+.mark .spot { fill: var(--ramp-3); animation: heat-up 8s 1.2s infinite; }
+.mark .glow { fill: var(--ramp-4); opacity: 0; filter: url(#mark-glow); animation: glow 8s 1.2s infinite; }
 @keyframes heat-up {
-  0%, 35%, 100% { fill: var(--ramp-3); }
-  65% { fill: var(--ramp-4); }
+  0% { fill: var(--ramp-3); animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  9% { fill: color-mix(in oklab, var(--ramp-3) 55%, var(--ramp-4)); animation-timing-function: ease-in-out; }
+  24%, 100% { fill: var(--ramp-3); }
 }
 @keyframes glow {
-  0%, 35%, 100% { opacity: 0; }
-  65% { opacity: 1; }
+  0% { opacity: 0; animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1); }
+  9% { opacity: 0.45; animation-timing-function: ease-in-out; }
+  24%, 100% { opacity: 0; }
 }
 @media (prefers-reduced-motion: reduce) { .mark .spot, .mark .glow { animation: none !important; } }
 .brand h1 { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; line-height: 1.1; white-space: nowrap; }
