@@ -53,19 +53,24 @@ a { color: var(--sea); }
 
 /* ---------------- Site header ---------------- */
 .site-head { flex: none; height: 58px; display: flex; align-items: center; gap: 14px; padding: 0 18px; background: var(--surface); border-bottom: 1px solid var(--line); position: relative; z-index: 20; }
-/* The logo: the 500 m circle with a V cut through it; the wedge left over is a dropped pin (brand/GUIDE.md).
+/* The logo: the 500 m circle with a V cut through it; the wedge left over is a dropped pin (docs/logo/).
    At header size it's the small cut, without the hotspot hole, which would close up this small */
 .wordmark { display: inline-flex; align-items: center; gap: 0.32em; }
-.mark { flex: none; width: 1.3em; height: 1.3em; }
+.mark { flex: none; width: 1.3em; height: 1.3em; overflow: visible; }
 .mark .v { fill: var(--ink); }
-.mark .spot { fill: var(--ramp-3); animation: heat-up 4s ease-in-out infinite; }
-/* The pin holds cool, warms through the heat map's hotter colours, then cools back */
+/* Every 2 s the pin heats up like a hotspot on the map: it warms to the next colour of the heat ramp
+   while a blurred copy behind it glows, then both cool back */
+.mark .spot { fill: var(--ramp-3); animation: heat-up 2s ease-in-out infinite; }
+.mark .glow { fill: var(--ramp-4); opacity: 0; filter: url(#mark-glow); animation: glow 2s ease-in-out infinite; }
 @keyframes heat-up {
-  0%, 30%, 100% { fill: var(--ramp-3); }
-  55% { fill: var(--ramp-4); }
-  70% { fill: var(--ramp-5); }
+  0%, 35%, 100% { fill: var(--ramp-3); }
+  65% { fill: var(--ramp-4); }
 }
-@media (prefers-reduced-motion: reduce) { .mark .spot { animation: none !important; } }
+@keyframes glow {
+  0%, 35%, 100% { opacity: 0; }
+  65% { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) { .mark .spot, .mark .glow { animation: none !important; } }
 .brand h1 { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; line-height: 1.1; white-space: nowrap; }
 .head-search { flex: 1; min-width: 0; display: flex; justify-content: center; }
 .head-search .search { flex: 0 1 420px; height: 38px; }
