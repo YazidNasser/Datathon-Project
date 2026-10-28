@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>VanScene</title>
   <meta name="description" content="See where and when crime is reported in Vancouver, in plain language. Built from VPD open data.">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cstyle%3Epath%7Bfill:%2316242b%7D@media (prefers-color-scheme:dark)%7Bpath%7Bfill:%23e4ecef%7D%7D%3C/style%3E%3Cpath d='M3 4h7l6 13 6-13h7L18.5 27a2.8 2.8 0 0 1-5 0z'/%3E%3Ccircle cx='16' cy='9' r='3.6' fill='%23d9607e'/%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%2212 12 232 232%22%3E%3Cstyle%3E.b{fill:#16242b}@media (prefers-color-scheme:dark){.b{fill:#e4ecef}}%3C/style%3E%3Cpath class=%22b%22 d=%22M54.57 48.81A108 108 0 1 0 201.43 48.81L128 176Z%22/%3E%3Cpath fill=%22#d9607e%22 d=%22M128 95.98L88.46 27.5A108 108 0 0 1 167.54 27.5Z%22/%3E%3C/svg%3E">
   <script>
     // Pick light or dark before the page draws so it doesn't flash: the saved choice, else the device setting
     (function () {
@@ -26,7 +26,7 @@
 <body>
   <header class="site-head">
     <!-- The name's first letter is the mark: a V whose point is a map pin, holding a hotspot that heats up and cools down -->
-    <div class="brand"><h1><span class="sr-only">VanScene</span><span class="wordmark" aria-hidden="true"><svg class="mark" viewBox="3.5 4 25 24.4"><path class="v" d="M4 4h5.8l6.2 13.6L22.2 4H28L18.3 26.8a2.5 2.5 0 0 1-4.6 0z"/><circle class="spot" cx="16" cy="9" r="2.5"/></svg>anScene</span></h1></div>
+    <div class="brand"><h1><span class="sr-only">VanScene</span><span class="wordmark" aria-hidden="true"><svg class="mark" viewBox="12 12 232 232"><path class="v" d="M54.57 48.81A108 108 0 1 0 201.43 48.81L128 176Z"/><path class="spot" d="M128 95.98L88.46 27.5A108 108 0 0 1 167.54 27.5Z"/></svg>VanScene</span></h1></div>
     <!-- The search sits here on wider screens; on phones placeSearch() moves it into the filter panel -->
     <div class="head-search" id="head-search">
       <label class="search">

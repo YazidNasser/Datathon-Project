@@ -1,14 +1,19 @@
-# VanScene
+<h1>
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/logo/vanscene-horizontal-reversed.svg">
+    <img alt="VanScene" src="docs/logo/vanscene-horizontal.svg" height="64">
+  </picture>
+</h1>
 
 **See where and when crime is reported in Vancouver, in plain language.**
+
+[![Open VanScene](https://img.shields.io/badge/Open_VanScene-live-2ea44f)](https://vanscene.netlify.app) [![Watch the 60-second demo](https://img.shields.io/badge/Demo-60_seconds-1f6feb?logo=youtube&logoColor=white)](https://youtu.be/DbSOYitXOZY) [![Data: VPD GeoDASH open data](https://img.shields.io/badge/Data-VPD_GeoDASH-6e7781)](https://geodash.vpd.ca/opendata/)
 
 <!-- GitHub shows the GIF that matches the reader's light or dark theme -->
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/vanscene-demo-dark.gif">
   <img alt="VanScene: picking years and evening hours, opening an area near Mount Pleasant, then comparing it with Kitsilano" src="docs/vanscene-demo.gif">
 </picture>
-
-**[Open VanScene](https://vanscene.netlify.app)** · [Watch the 60-second demo](https://youtu.be/DbSOYitXOZY)
 
 VanScene turns the Vancouver Police Department's open crime data into a map you can read at a glance. It's for people choosing a neighbourhood or getting to know one: compare areas, see what kinds of incidents get reported there and at what time of day, and check whether a year was unusual.
 
@@ -93,6 +98,7 @@ A static site with no framework and no build step. It's deployed on Netlify from
 │   ├── raw/              # create locally for VPD CSVs (not in the repo)
 │   └── vpd/              # VPD's disclaimer and data description
 ├── docs/
+│   ├── logo/                   # the logo at the top of this page, light and dark
 │   ├── vanscene-demo.gif       # the animation at the top of this page, light theme
 │   └── vanscene-demo-dark.gif  # the same in the dark theme, shown to readers using GitHub's dark mode
 ├── scripts/

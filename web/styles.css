@@ -53,18 +53,17 @@ a { color: var(--sea); }
 
 /* ---------------- Site header ---------------- */
 .site-head { flex: none; height: 58px; display: flex; align-items: center; gap: 14px; padding: 0 18px; background: var(--surface); border-bottom: 1px solid var(--line); position: relative; z-index: 20; }
-/* The wordmark: the V is drawn, sized to the font's capitals and sat on its baseline, so it reads as the first letter.
-   It's in the text colour, so the hotspot in its point (which runs up the heat map's colours and back) is the only colour */
-.wordmark { display: inline-flex; align-items: baseline; }
-.mark { flex: none; width: 0.74em; height: 0.72em; margin-right: -0.06em; transform: translateY(0.03em); }
-/* negative margin kerns "Va" the way the font would; the point dips just below the baseline, as pointed letters do */
+/* The logo: the 500 m circle with a V cut through it; the wedge left over is a dropped pin (brand/GUIDE.md).
+   At header size it's the small cut, without the hotspot hole, which would close up this small */
+.wordmark { display: inline-flex; align-items: center; gap: 0.32em; }
+.mark { flex: none; width: 1.3em; height: 1.3em; }
 .mark .v { fill: var(--ink); }
-.mark .spot { fill: var(--ramp-3); transform-box: fill-box; transform-origin: center; animation: heat-up 4s ease-in-out infinite; }
-/* Holds cool, warms to the hottest colour as it swells a little, then cools back */
+.mark .spot { fill: var(--ramp-3); animation: heat-up 4s ease-in-out infinite; }
+/* The pin holds cool, warms through the heat map's hotter colours, then cools back */
 @keyframes heat-up {
-  0%, 30%, 100% { fill: var(--ramp-3); transform: scale(1); }
-  55% { fill: var(--ramp-4); transform: scale(1.12); }
-  70% { fill: var(--ramp-5); transform: scale(1.18); }
+  0%, 30%, 100% { fill: var(--ramp-3); }
+  55% { fill: var(--ramp-4); }
+  70% { fill: var(--ramp-5); }
 }
 @media (prefers-reduced-motion: reduce) { .mark .spot { animation: none !important; } }
 .brand h1 { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.01em; line-height: 1.1; white-space: nowrap; }
