@@ -12,7 +12,7 @@
   --sea: #0d6c8a;          /* accent: selected buttons, area A */
   --sea-soft: #e1f0f5;
   --on-sea: #ffffff;       /* text on the accent colour */
-  --b: #7a4fb0;            /* area B in Compare */
+  --b: #2f7d52;            /* area B in Compare */
   --bar-bg: #e9eef0;
   /* Heat map colours, fewest to most: on a light map "more" gets darker, on a dark map it gets brighter.
      Pale amber to deep plum (the dark theme's magma ramp run the other way), so busy reads as dense, not as danger red */
@@ -29,11 +29,12 @@
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 :root[data-theme="dark"] {
-  --ink: #e4ecef; --muted: #a0b2b9; --faint: #8a9ca3; --line: #2b3a41;
-  --page: #0e161a; --surface: #172227; --surface-2: #1f2c32;
-  --sea: #4fb6d8; --sea-soft: #15343f; --on-sea: #06212b; --b: #b893ec;
-  --bar-bg: #24333a; --map-bg: #1b2327;
-  --status-bg: rgba(14, 22, 26, 0.92);
+  /* Neutral graphite so the heat is the only colour; the accent is the ink itself */
+  --ink: #ece9e4; --muted: #aaa6a1; --faint: #8f8b86; --line: #303033;
+  --page: #121212; --surface: #1b1b1c; --surface-2: #252527;
+  --sea: #ece9e4; --sea-soft: #2c2c2e; --on-sea: #121212; --b: #8fd0a6;
+  --bar-bg: #2a2a2c; --map-bg: #161616;
+  --status-bg: rgba(18, 18, 18, 0.92);
   --tile-filter: grayscale(1) invert(1) brightness(0.9) contrast(0.85);
   --ramp-1: #51127c; --ramp-2: #b73779; --ramp-3: #fc8961; --ramp-4: #fecf8f; --ramp-5: #fcfdbf;
   --heat-blend: screen;

@@ -1102,7 +1102,7 @@ function renderTrends() {
       <div class="ybars" role="img" aria-label="${attr(yearSummary(span, perYear, "Reports city-wide"))}">${span.map((y, i) => `<div>${missing.includes(y)
         ? `<i class="gap" style="height:30%" title="No ${y} data"></i>`
         : yearBar(y, perYear.get(y) || 0, maxY, i)}<span>${String(y).slice(2)}</span></div>`).join("")}</div>
-      <p class="hint">Coloured bars are the years you've selected.${missing.length ? ` No data for ${missing.join(", ")}.` : ""}${state.data.partialYear ? ` ${paceNote()}` : ""}</p></div>
+      <p class="hint">Highlighted bars are the years you've selected.${missing.length ? ` No data for ${missing.join(", ")}.` : ""}${state.data.partialYear ? ` ${paceNote()}` : ""}</p></div>
     <div class="tsec"><h3>Hour of the day</h3>
       <div class="hbars" role="img" aria-label="${attr(hourSummary(hours, "Reports city-wide"))}">${TRACK_ORDER.map((h, i) => `<i style="height:${(hours[h] / maxH) * 100}%;--i:${i}" title="${fmtHour(h)}: ${fmt(hours[h])}"></i>`).join("")}</div>
       ${HOUR_AXIS}</div>
