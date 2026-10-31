@@ -65,7 +65,7 @@ Then open `http://localhost:8000`. It needs a local server: opening `index.html`
 
 ### Refresh the data yourself
 
-The weekly Action ([`.github/workflows/update-data.yml`](.github/workflows/update-data.yml)) runs every Sunday at 19:00 UTC: noon in Vancouver in summer, 11 am in winter. It downloads every year from 2016 to now, rebuilds `data.json`, and commits it only if something changed. To run it early, open the **Actions** tab, pick **Update crime data**, and click **Run workflow**.
+The weekly Action ([`.github/workflows/update-data.yml`](.github/workflows/update-data.yml)) runs every Sunday at 19:00 UTC: noon in Vancouver in summer, 11 am in winter. It downloads every year from 2016 to now, rebuilds `data.json`, and commits it only if something changed. If the run fails, or the new data looks broken, it opens an issue called **Weekly crime data update failed** with a link to the log, and the site keeps the previous data. To run it early, open the **Actions** tab, pick **Update crime data**, and click **Run workflow**.
 
 To do the same on your own computer, from the project folder:
 
@@ -90,7 +90,7 @@ A static site with no framework and no build step. It's deployed on Netlify from
 ├── netlify.toml          # publishes web/ on Netlify
 ├── .github/workflows/
 │   ├── ci.yml            # runs the tests on every pull request
-│   └── update-data.yml   # refreshes web/data.json every Sunday
+│   └── update-data.yml   # refreshes web/data.json every Sunday, opens an issue if that fails
 ├── data/
 │   ├── raw/              # create locally for VPD CSVs (not in the repo)
 │   └── vpd/              # VPD's disclaimer and data description

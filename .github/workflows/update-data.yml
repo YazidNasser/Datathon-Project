@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: write      # to commit the new data.json
+  issues: write        # to open an issue when the update fails
 
 concurrency:
   group: update-data
@@ -40,3 +41,21 @@ jobs:
           git add web/data.json
           git commit -m "Update crime data to $latest"
           git push
+
+      # GitHub's own failure email reaches only one person; an issue is seen by everyone watching the repo.
+      # One open issue per problem: later failures add a comment instead of a new issue.
+      - name: Open an issue if the update failed
+        if: failure() || cancelled()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          LOG: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Weekly crime data update failed"
+          body="The weekly update didn't finish, so the map still shows the previous data. The log says why: $LOG"
+          open=$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --body "Failed again: $LOG"
+          else
+            gh issue create --title "$title" --label bug --body "$body"
+          fi
