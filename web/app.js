@@ -750,13 +750,13 @@ function fitTo(bounds, maxZoom = 14) {
   map.fitBounds(bounds, { ...panelPadding(L.latLngBounds(bounds)), maxZoom, animate: !reduceMotion });
 }
 const areaBounds = (ll) => ll.toBounds(CONFIG.radiusMeters * 3.2);
-// The part of the map that isn't behind a panel, for panelPadding's result `o`
-const uncovered = (o) => L.latLngBounds(map.containerPointToLatLng(o.paddingTopLeft), map.containerPointToLatLng(map.getSize().subtract(o.paddingBottomRight)));
 // Move the map only if part of `bounds` is hidden behind a panel or off screen, and never zoom in to do it
 function keepInView(bounds) {
-  if (!uncovered(panelPadding(bounds)).contains(bounds)) fitTo(bounds, map.getZoom());
+  const o = panelPadding(bounds), size = map.getSize();
+  const seen = L.latLngBounds(map.containerPointToLatLng(o.paddingTopLeft), map.containerPointToLatLng(size.subtract(o.paddingBottomRight)));
+  if (!seen.contains(bounds)) fitTo(bounds, map.getZoom());
 }
-// The max bounds leave room around the city for the panels, so a fling could stop with all of it off screen.
+// The max bounds leave room around the city for the panels, so a fling could stop with the city all but off screen.
 // Then pull the nearest part of the city back to the middle of the uncovered map.
 map.on("moveend", () => {
   if (L.Draggable._dragging) return;   // a press stops a glide (ending a move); wait for that drag to end instead
@@ -764,11 +764,13 @@ map.on("moveend", () => {
   // (_limitCenter is the check Leaflet 1.9 makes for that; the version is pinned in index.html)
   const c = map.getCenter();
   if (!c.equals(map._limitCenter(c, map.getZoom(), map.options.maxBounds))) return;
-  const city = L.latLngBounds(CITY_BOUNDS), seen = uncovered(panelPadding(city));
-  if (seen.intersects(city)) return;
-  const mid = seen.getCenter(), [[s, w], [n, e]] = CITY_BOUNDS;
-  const near = L.latLng(Math.min(n, Math.max(s, mid.lat)), Math.min(e, Math.max(w, mid.lng)));
-  map.panBy(map.latLngToContainerPoint(near).subtract(map.latLngToContainerPoint(mid)), { animate: !reduceMotion });
+  const o = panelPadding(L.latLngBounds(CITY_BOUNDS)), [[s, w], [n, e]] = CITY_BOUNDS;
+  const tl = L.point(o.paddingTopLeft), br = map.getSize().subtract(o.paddingBottomRight), mid = tl.add(br).divideBy(2);
+  const a = map.latLngToContainerPoint([n, w]), b = map.latLngToContainerPoint([s, e]);   // the city's box on screen
+  const near = L.point(Math.min(b.x, Math.max(a.x, mid.x)), Math.min(b.y, Math.max(a.y, mid.y)));
+  // Within a quarter of the uncovered map from its middle is close enough, so the city's edges can still be looked at
+  if (Math.abs(near.x - mid.x) <= (br.x - tl.x) / 4 && Math.abs(near.y - mid.y) <= (br.y - tl.y) / 4) return;
+  map.panBy(near.subtract(mid), { animate: !reduceMotion });
 });
 function fitForView() {
   if (state.view === "map" && state.selected) return fitTo(areaBounds(state.selected));
