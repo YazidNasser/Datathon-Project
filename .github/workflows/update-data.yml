@@ -6,9 +6,11 @@ on:
     # VPD republishes GeoDASH on Sunday mornings (about 10:15 am Vancouver time), so this runs after that.
     - cron: "0 19 * * 0"
   workflow_dispatch:   # also lets you run it by hand from the Actions tab
-
-permissions:
-  contents: write      # to commit the new data.json
+    inputs:
+      force:
+        description: "Publish even if there are over 5% fewer incidents (only after checking GeoDASH)"
+        type: boolean
+        default: false
 
 concurrency:
   group: update-data
@@ -18,6 +20,8 @@ jobs:
   update:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: write      # to commit the new data.json
     steps:
       - uses: actions/checkout@v4
 
@@ -26,7 +30,7 @@ jobs:
           python-version: "3.12"
 
       - name: Download VPD data and rebuild data.json
-        run: python scripts/update_data.py
+        run: python scripts/update_data.py ${{ inputs.force && '--force' || '' }}
 
       - name: Commit data.json if it changed
         run: |
@@ -40,3 +44,31 @@ jobs:
           git add web/data.json
           git commit -m "Update crime data to $latest"
           git push
+
+  # GitHub's own failure email reaches only one person; an issue is seen by everyone watching the repo.
+  # A separate job, so the step handling downloaded data never holds issue access, and so it still runs after a timeout.
+  alert:
+    needs: update
+    if: failure() || cancelled()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
+      # One open issue per problem: later failures add a comment instead of a new issue.
+      - name: Open an issue if the update failed
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          LOG: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="Weekly crime data update failed"
+          body="The weekly update didn't finish, so the map still shows the previous data. The log says why: $LOG
+
+          If it stopped because of a big drop in incidents and GeoDASH confirms the drop is real, run **Update crime data** again from the Actions tab with **force** ticked."
+          open=$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
+          if [ -n "$open" ]; then
+            gh issue comment "$open" --body "Failed again: $LOG"
+          else
+            gh issue create --title "$title" --label bug --body "$body"
+          fi
