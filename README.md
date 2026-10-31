@@ -89,7 +89,8 @@ A static site with no framework and no build step. It's deployed on Netlify from
 ├── README.md
 ├── netlify.toml          # publishes web/ on Netlify
 ├── .github/workflows/
-│   └── update-data.yml   # refreshes web/data.json every Sunday
+│   ├── ci.yml            # runs the tests on every pull request
+│   └── update-data.yml   # refreshes web/data.json every Sunday, after the tests pass
 ├── data/
 │   ├── raw/              # create locally for VPD CSVs (not in the repo)
 │   └── vpd/              # VPD's disclaimer and data description
@@ -100,6 +101,8 @@ A static site with no framework and no build step. It's deployed on Netlify from
 ├── scripts/
 │   ├── update_data.py    # downloads the latest VPD data, then runs prepare_data.py
 │   └── prepare_data.py   # turns the raw CSVs into web/data.json
+├── tests/
+│   └── test_data.py      # checks the data scripts and web/data.json
 └── web/
     ├── index.html        # the page
     ├── styles.css        # the look, light and dark
@@ -124,7 +127,7 @@ A static site with no framework and no build step. It's deployed on Netlify from
 
 ## Contributing
 
-Open an issue or a pull request against `main`. Keep changes small and focused, run the app locally to check them, and describe what changed and how you tested it in the pull request.
+Open an issue or a pull request against `main`. Keep changes small and focused, run the app locally to check them, run the tests with `python -m unittest discover tests`, and describe what changed and how you tested it in the pull request.
 
 ## What's next
 

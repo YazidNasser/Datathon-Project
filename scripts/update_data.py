@@ -90,6 +90,10 @@ def without_timestamp(data):
     return {key: value for key, value in data.items() if key != "generated"}
 
 
+def big_drop(old, new):
+    return incidents(new) < incidents(old) * (1 - MAX_DROP)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--force", action="store_true", help="Replace data.json even if the new data has far fewer incidents")
@@ -121,7 +125,7 @@ def main():
         if old and without_timestamp(old) == without_timestamp(new):
             print(f"\nNo change: data.json already holds VPD data to {old['latestDate']}.")
             return
-        if old and incidents(new) < incidents(old) * (1 - MAX_DROP) and not args.force:
+        if old and big_drop(old, new) and not args.force:
             sys.exit(
                 f"\nNot updating: the new data has {incidents(new):,} incidents on the map against "
                 f"{incidents(old):,} now. That's more than a {MAX_DROP:.0%} drop, which usually means a "
