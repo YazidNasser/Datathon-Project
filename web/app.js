@@ -619,6 +619,7 @@ function bindTimeControls() {
 // own scale, an evenly spread type like home break-ins turned the whole city red. A part of the day is drawn
 // per hour on that same scale (see updateHeat), so it compares fairly with "Any time" too.
 let heatSpots = [], refSpots = [];
+let refHours = null, refScale = null;   // what refSpots and its colour scale were last worked out for
 
 // A part year (2026 so far) counts as a full year's rate, so it compares fairly with whole years
 function yearWeight(y) {
@@ -652,8 +653,12 @@ function updateHeat() {
   // exactly as busy per hour as the whole day looks like "Any time"; busier parts glow more, quieter ones less.
   const hrs = state.hours ? state.hours.size : 0;   // 0 for "Any time"
   heatSpots = n ? spotsPerYear((p) => matches(p, state.shown), n, hrs ? 24 / hrs : 1) : [];
-  refSpots = spotsPerYear((p) => (!hrs || p[HOUR] >= 0) && passesFilters(p, { ignoreType: true, ignoreTime: true }),
-    state.data.years.length);
+  // refSpots only changes when a time of day is turned on or off, so it isn't rebuilt on every filter change
+  if (refHours !== !!hrs) {
+    refHours = !!hrs;
+    refSpots = spotsPerYear((p) => !hrs || p[HOUR] >= 0, state.data.years.length);
+    refScale = null;
+  }
   fadeHeat();
   drawHeat();
   // With a time of day picked, say how its share of reports compares with its share of the clock
@@ -677,19 +682,22 @@ function drawHeat() {
   const z = map.getZoom();
   const radius = Math.round(8 + (z - CONFIG.minZoom) * 3);   // smaller blobs when zoomed out, so heat stays on land
   const blur = Math.round(radius * 1.25);
-  // Add up the average year's incidents in screen cells the same way leaflet.heat does, then find how busy a "hotspot" cell is
-  const cellSize = (radius + blur) / 2;
-  const sums = new Map();
-  for (const [lat, lng, n] of refSpots) {
-    const p = map.project([lat, lng], z);
-    const key = Math.floor(p.x / cellSize) * 1e7 + Math.floor(p.y / cellSize);
-    sums.set(key, (sums.get(key) || 0) + n);
+  // Add up the average year's incidents in screen cells the same way leaflet.heat does, then find how busy a "hotspot" cell is.
+  // That only depends on the zoom and refSpots, so it's worked out once for each.
+  if (refScale?.z !== z) {
+    const cellSize = (radius + blur) / 2;
+    const sums = new Map();
+    for (const [lat, lng, n] of refSpots) {
+      const p = map.project([lat, lng], z);
+      const key = Math.floor(p.x / cellSize) * 1e7 + Math.floor(p.y / cellSize);
+      sums.set(key, (sums.get(key) || 0) + n);
+    }
+    const counts = [...sums.values()].sort((a, b) => a - b);
+    const busy = counts.length ? counts[Math.min(counts.length - 1, Math.floor(counts.length * CONFIG.hotspotLevel))] : 1;
+    refScale = { z, scale: CONFIG.heatStrength / Math.max(busy, 1) };   // a cell as busy as `busy` shows at full strength
   }
-  const counts = [...sums.values()].sort((a, b) => a - b);
-  const busy = counts.length ? counts[Math.min(counts.length - 1, Math.floor(counts.length * CONFIG.hotspotLevel))] : 1;
-  const scale = CONFIG.heatStrength / Math.max(busy, 1);      // a cell as busy as `busy` shows at full strength
   heat.setOptions({ radius, blur });
-  heat.setLatLngs(heatSpots.map(([lat, lng, n]) => [lat, lng, n * scale]));
+  heat.setLatLngs(heatSpots.map(([lat, lng, n]) => [lat, lng, n * refScale.scale]));
 }
 // While the map zooms, leaflet.heat only stretches its last picture, then redraws it at the new size,
 // which read as a pop. Dim the heat as the zoom starts and bring it back once it's redrawn.
