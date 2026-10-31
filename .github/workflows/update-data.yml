@@ -12,10 +12,6 @@ on:
         type: boolean
         default: false
 
-permissions:
-  contents: write      # to commit the new data.json
-  issues: write        # to open an issue when the update fails
-
 concurrency:
   group: update-data
   cancel-in-progress: false
@@ -24,6 +20,8 @@ jobs:
   update:
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: write      # to commit the new data.json
     steps:
       - uses: actions/checkout@v4
 
@@ -47,10 +45,18 @@ jobs:
           git commit -m "Update crime data to $latest"
           git push
 
-      # GitHub's own failure email reaches only one person; an issue is seen by everyone watching the repo.
+  # GitHub's own failure email reaches only one person; an issue is seen by everyone watching the repo.
+  # A separate job, so the step handling downloaded data never holds issue access, and so it still runs after a timeout.
+  alert:
+    needs: update
+    if: failure() || cancelled()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      issues: write
+    steps:
       # One open issue per problem: later failures add a comment instead of a new issue.
       - name: Open an issue if the update failed
-        if: failure() || cancelled()
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}

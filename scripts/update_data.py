@@ -141,6 +141,9 @@ def main():
             check=True,
         )
         new = json.loads(new_path.read_text(encoding="utf-8"))
+        problem = shape_problem(new)
+        if problem:
+            sys.exit(f"\nNot updating: {problem}. web/data.json is unchanged.")
         old = json.loads(OUT.read_text(encoding="utf-8")) if OUT.exists() else None
 
         if old and without_timestamp(old) == without_timestamp(new):
@@ -152,9 +155,6 @@ def main():
                 f"{incidents(old):,} now. That's more than a {MAX_DROP:.0%} drop, which usually means a "
                 "broken download. Check GeoDASH, then rerun with --force if the drop is real."
             )
-        problem = shape_problem(new)
-        if problem:
-            sys.exit(f"\nNot updating: {problem}. web/data.json is unchanged.")
         shutil.copyfile(new_path, OUT)
         before = f"{old['latestDate']}, {incidents(old):,} incidents" if old else "no file"
         print(f"\nUpdated web/data.json: data to {new['latestDate']}, {incidents(new):,} incidents (was {before}).")
