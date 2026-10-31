@@ -21,8 +21,6 @@ sys.path.insert(0, str(REPO_ROOT / "scripts"))
 import prepare_data  # noqa: E402
 import update_data  # noqa: E402
 
-DATA_JSON = REPO_ROOT / "web" / "data.json"
-
 # A few rows in VPD's CSV format, one for each case prepare_data.py handles.
 # X/Y for City Hall and Stanley Park come from pyproj (EPSG:4326 -> EPSG:26910).
 SAMPLE_CSV = """TYPE,YEAR,MONTH,DAY,HOUR,MINUTE,HUNDRED_BLOCK,NEIGHBOURHOOD,X,Y
@@ -69,9 +67,9 @@ class TestHelpers(unittest.TestCase):
         def data(n):
             return {"points": {"type": [0] * n}}
 
-        self.assertFalse(update_data.big_drop(data(100), data(96)))
-        self.assertFalse(update_data.big_drop(data(100), data(95)))
-        self.assertTrue(update_data.big_drop(data(100), data(94)))
+        edge = round(100 * (1 - update_data.MAX_DROP))
+        self.assertFalse(update_data.big_drop(data(100), data(edge)))
+        self.assertTrue(update_data.big_drop(data(100), data(edge - 1)))
 
     def test_without_timestamp(self):
         a = {"generated": "2026-01-01T00:00:00", "latestDate": "2025-12-31"}
@@ -88,7 +86,7 @@ class TestPrepareData(unittest.TestCase):
             csv_path, out = Path(tmp) / "sample.csv", Path(tmp) / "data.json"
             csv_path.write_text(SAMPLE_CSV, encoding="utf-8")
             subprocess.run(
-                [sys.executable, str(REPO_ROOT / "scripts" / "prepare_data.py"), str(csv_path), "--out", str(out)],
+                [sys.executable, str(update_data.PREPARE), str(csv_path), "--out", str(out)],
                 check=True, capture_output=True,
             )
             cls.data = json.loads(out.read_text(encoding="utf-8"))
@@ -112,27 +110,31 @@ class TestPrepareData(unittest.TestCase):
         self.assertEqual(rows, [(2025, 314, 18, "Bike theft"), (2026, 602, -1, "Homicide")])
         self.assertTrue(next(t for t in d["types"] if t["vpd"] == "Homicide")["blurred"])
 
+    def test_output_passes_the_shape_check(self):
+        self.assertIsNone(update_data.shape_problem(self.data))
 
-@unittest.skipUnless(DATA_JSON.exists(), "web/data.json not built")
-class TestPublishedData(unittest.TestCase):
-    """The web/data.json the site serves has the shape web/app.js expects."""
+
+class TestShapeCheck(unittest.TestCase):
+    """update_data.py refuses a data.json that web/app.js couldn't read."""
 
     @classmethod
     def setUpClass(cls):
-        cls.data = json.loads(DATA_JSON.read_text(encoding="utf-8"))
+        cls.text = update_data.OUT.read_text(encoding="utf-8")
 
-    def test_top_level_keys(self):
-        for key in ("version", "latestDate", "years", "partialYear", "noLocationByYear", "types", "neighbourhoods", "points"):
-            self.assertIn(key, self.data)
-        self.assertEqual(self.data["version"], 3)
-        date.fromisoformat(self.data["latestDate"])
+    def test_published_data_passes(self):
+        self.assertIsNone(update_data.shape_problem(json.loads(self.text)))
 
-    def test_point_columns_line_up(self):
-        p, d = self.data["points"], self.data
-        n = len(p["type"])
-        self.assertGreater(n, 0)
-        for col in ("lat", "lng", "hour", "year", "md"):
-            self.assertEqual(len(p[col]), n, col)
-        self.assertTrue(all(0 <= t < len(d["types"]) for t in p["type"]))
-        self.assertTrue(all(-1 <= h <= 23 for h in p["hour"]))
-        self.assertTrue(set(p["year"]) <= set(d["years"]))
+    def test_broken_data_is_refused(self):
+        breaks = {
+            "version": lambda d: d.update(version=2),
+            "empty": lambda d: d["points"].update({col: [] for col in d["points"] if col not in ("lat0", "lng0")}),
+            "short column": lambda d: d["points"]["lat"].pop(),
+            "unknown type": lambda d: d["points"]["type"].__setitem__(0, len(d["types"])),
+            "bad hour": lambda d: d["points"]["hour"].__setitem__(0, 24),
+            "unlisted year": lambda d: d["years"].pop(),
+        }
+        for name, break_it in breaks.items():
+            with self.subTest(name):
+                data = json.loads(self.text)
+                break_it(data)
+                self.assertIsNotNone(update_data.shape_problem(data))

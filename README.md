@@ -90,7 +90,7 @@ A static site with no framework and no build step. It's deployed on Netlify from
 ├── netlify.toml          # publishes web/ on Netlify
 ├── .github/workflows/
 │   ├── ci.yml            # runs the tests on every pull request
-│   └── update-data.yml   # refreshes web/data.json every Sunday, after the tests pass
+│   └── update-data.yml   # refreshes web/data.json every Sunday
 ├── data/
 │   ├── raw/              # create locally for VPD CSVs (not in the repo)
 │   └── vpd/              # VPD's disclaimer and data description

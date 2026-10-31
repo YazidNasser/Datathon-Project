@@ -17,7 +17,8 @@ What it does:
   3. Replaces web/data.json only if the data itself changed, so the weekly job doesn't
      commit a new file just because the "generated" time moved.
   4. Refuses to replace it if the new data has far fewer incidents than the current
-     file, which usually means a broken or partial download rather than real news.
+     file, which usually means a broken or partial download rather than real news,
+     or if the new file has a shape the app can't read.
 
 Only the Python standard library is needed.
 """
@@ -94,6 +95,26 @@ def big_drop(old, new):
     return incidents(new) < incidents(old) * (1 - MAX_DROP)
 
 
+def shape_problem(data):
+    """What in data.json would break web/app.js, or None if it looks right."""
+    p = data["points"]
+    n = incidents(data)
+    if data["version"] != 3:
+        return f"version is {data['version']}, the app reads version 3"
+    if n == 0:
+        return "no incidents on the map"
+    if any(len(p[col]) != n for col in ("lat", "lng", "hour", "year", "md")):
+        return "the point columns have different lengths"
+    if min(p["type"]) < 0 or max(p["type"]) >= len(data["types"]):
+        return "a point has an unknown crime type"
+    if min(p["hour"]) < -1 or max(p["hour"]) > 23:
+        return "a point has an hour outside -1 to 23"
+    if not set(p["year"]) <= set(data["years"]):
+        return "a point has a year missing from the years list"
+    date.fromisoformat(data["latestDate"])
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--force", action="store_true", help="Replace data.json even if the new data has far fewer incidents")
@@ -131,6 +152,9 @@ def main():
                 f"{incidents(old):,} now. That's more than a {MAX_DROP:.0%} drop, which usually means a "
                 "broken download. Check GeoDASH, then rerun with --force if the drop is real."
             )
+        problem = shape_problem(new)
+        if problem:
+            sys.exit(f"\nNot updating: {problem}. web/data.json is unchanged.")
         shutil.copyfile(new_path, OUT)
         before = f"{old['latestDate']}, {incidents(old):,} incidents" if old else "no file"
         print(f"\nUpdated web/data.json: data to {new['latestDate']}, {incidents(new):,} incidents (was {before}).")

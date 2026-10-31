@@ -28,9 +28,6 @@ jobs:
       - name: Download VPD data and rebuild data.json
         run: python scripts/update_data.py
 
-      - name: Check the new data.json before publishing it
-        run: python -m unittest discover tests -v
-
       - name: Commit data.json if it changed
         run: |
           if git diff --quiet -- web/data.json; then
