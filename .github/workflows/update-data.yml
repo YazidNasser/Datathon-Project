@@ -6,6 +6,11 @@ on:
     # VPD republishes GeoDASH on Sunday mornings (about 10:15 am Vancouver time), so this runs after that.
     - cron: "0 19 * * 0"
   workflow_dispatch:   # also lets you run it by hand from the Actions tab
+    inputs:
+      force:
+        description: "Publish even if there are over 5% fewer incidents (only after checking GeoDASH)"
+        type: boolean
+        default: false
 
 permissions:
   contents: write      # to commit the new data.json
@@ -27,7 +32,7 @@ jobs:
           python-version: "3.12"
 
       - name: Download VPD data and rebuild data.json
-        run: python scripts/update_data.py
+        run: python scripts/update_data.py ${{ inputs.force && '--force' || '' }}
 
       - name: Commit data.json if it changed
         run: |
@@ -52,7 +57,9 @@ jobs:
           LOG: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           title="Weekly crime data update failed"
-          body="The weekly update didn't finish, so the map still shows the previous data. The log says why: $LOG"
+          body="The weekly update didn't finish, so the map still shows the previous data. The log says why: $LOG
+
+          If it stopped because of a big drop in incidents and GeoDASH confirms the drop is real, run **Update crime data** again from the Actions tab with **force** ticked."
           open=$(gh issue list --state open --search "\"$title\" in:title" --json number --jq '.[0].number // empty')
           if [ -n "$open" ]; then
             gh issue comment "$open" --body "Failed again: $LOG"
