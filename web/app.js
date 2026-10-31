@@ -87,6 +87,8 @@ const map = L.map("map", {
   // Quarter steps: whole steps made the opening view round down to half size whenever the city
   // didn't quite fit at the next level, and made each scroll a jarring jump
   zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 100,
+  // Leaflet's fling has no top speed, so a quick swipe kept gliding for ten seconds or more; this caps it near two
+  inertiaMaxSpeed: 1500,
 }).setView(CONFIG.center, CONFIG.zoom);
 // Keeps people near Vancouver, with room to slide any part of the city out from behind the side panels
 map.setMaxBounds([[49.10, -123.55], [49.40, -122.70]]);
@@ -748,12 +750,26 @@ function fitTo(bounds, maxZoom = 14) {
   map.fitBounds(bounds, { ...panelPadding(L.latLngBounds(bounds)), maxZoom, animate: !reduceMotion });
 }
 const areaBounds = (ll) => ll.toBounds(CONFIG.radiusMeters * 3.2);
+// The part of the map that isn't behind a panel, for panelPadding's result `o`
+const uncovered = (o) => L.latLngBounds(map.containerPointToLatLng(o.paddingTopLeft), map.containerPointToLatLng(map.getSize().subtract(o.paddingBottomRight)));
 // Move the map only if part of `bounds` is hidden behind a panel or off screen, and never zoom in to do it
 function keepInView(bounds) {
-  const o = panelPadding(bounds), size = map.getSize();
-  const seen = L.latLngBounds(map.containerPointToLatLng(o.paddingTopLeft), map.containerPointToLatLng(size.subtract(o.paddingBottomRight)));
-  if (!seen.contains(bounds)) fitTo(bounds, map.getZoom());
+  if (!uncovered(panelPadding(bounds)).contains(bounds)) fitTo(bounds, map.getZoom());
 }
+// The max bounds leave room around the city for the panels, so a fling could stop with all of it off screen.
+// Then pull the nearest part of the city back to the middle of the uncovered map.
+map.on("moveend", () => {
+  if (L.Draggable._dragging) return;   // a press stops a glide (ending a move); wait for that drag to end instead
+  // Two pans started on one moveend cancel each other, so let Leaflet bring the map inside its max bounds first
+  // (_limitCenter is the check Leaflet 1.9 makes for that; the version is pinned in index.html)
+  const c = map.getCenter();
+  if (!c.equals(map._limitCenter(c, map.getZoom(), map.options.maxBounds))) return;
+  const city = L.latLngBounds(CITY_BOUNDS), seen = uncovered(panelPadding(city));
+  if (seen.intersects(city)) return;
+  const mid = seen.getCenter(), [[s, w], [n, e]] = CITY_BOUNDS;
+  const near = L.latLng(Math.min(n, Math.max(s, mid.lat)), Math.min(e, Math.max(w, mid.lng)));
+  map.panBy(map.latLngToContainerPoint(near).subtract(map.latLngToContainerPoint(mid)), { animate: !reduceMotion });
+});
 function fitForView() {
   if (state.view === "map" && state.selected) return fitTo(areaBounds(state.selected));
   if (state.view === "compare" && state.a && state.b) return fitTo(areaBounds(state.a).extend(areaBounds(state.b)), 15);
