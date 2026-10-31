@@ -757,7 +757,7 @@ function keepInView(bounds) {
   if (!seen.contains(bounds)) fitTo(bounds, map.getZoom());
 }
 // The max bounds leave room around the city for the panels, so a fling could stop with the city all but off screen.
-// Then pull the nearest part of the city back to the middle of the uncovered map.
+// Then bring the middle of the city back to the middle of the uncovered map, at the same zoom.
 map.on("moveend", () => {
   if (L.Draggable._dragging) return;   // a press stops a glide (ending a move); wait for that drag to end instead
   // Two pans started on one moveend cancel each other, so let Leaflet bring the map inside its max bounds first
@@ -770,7 +770,7 @@ map.on("moveend", () => {
   const near = L.point(Math.min(b.x, Math.max(a.x, mid.x)), Math.min(b.y, Math.max(a.y, mid.y)));
   // Within a quarter of the uncovered map from its middle is close enough, so the city's edges can still be looked at
   if (Math.abs(near.x - mid.x) <= (br.x - tl.x) / 4 && Math.abs(near.y - mid.y) <= (br.y - tl.y) / 4) return;
-  map.panBy(near.subtract(mid), { animate: !reduceMotion });
+  map.panBy(a.add(b).divideBy(2).subtract(mid), { animate: !reduceMotion });
 });
 function fitForView() {
   if (state.view === "map" && state.selected) return fitTo(areaBounds(state.selected));
