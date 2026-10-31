@@ -87,6 +87,8 @@ const map = L.map("map", {
   // Quarter steps: whole steps made the opening view round down to half size whenever the city
   // didn't quite fit at the next level, and made each scroll a jarring jump
   zoomSnap: 0.25, zoomDelta: 0.5, wheelPxPerZoomLevel: 100,
+  // Leaflet's fling has no top speed, so a quick swipe kept gliding for ten seconds or more; this caps it near two
+  inertiaMaxSpeed: 1500,
 }).setView(CONFIG.center, CONFIG.zoom);
 // Keeps people near Vancouver, with room to slide any part of the city out from behind the side panels
 map.setMaxBounds([[49.10, -123.55], [49.40, -122.70]]);
@@ -754,6 +756,22 @@ function keepInView(bounds) {
   const seen = L.latLngBounds(map.containerPointToLatLng(o.paddingTopLeft), map.containerPointToLatLng(size.subtract(o.paddingBottomRight)));
   if (!seen.contains(bounds)) fitTo(bounds, map.getZoom());
 }
+// The max bounds leave room around the city for the panels, so a fling could stop with the city all but off screen.
+// Then bring the middle of the city back to the middle of the uncovered map, at the same zoom.
+map.on("moveend", () => {
+  if (L.Draggable._dragging) return;   // a press stops a glide (ending a move); wait for that drag to end instead
+  // Two pans started on one moveend cancel each other, so let Leaflet bring the map inside its max bounds first
+  // (_limitCenter is the check Leaflet 1.9 makes for that; the version is pinned in index.html)
+  const c = map.getCenter();
+  if (!c.equals(map._limitCenter(c, map.getZoom(), map.options.maxBounds))) return;
+  const o = panelPadding(L.latLngBounds(CITY_BOUNDS)), [[s, w], [n, e]] = CITY_BOUNDS;
+  const tl = L.point(o.paddingTopLeft), br = map.getSize().subtract(o.paddingBottomRight), mid = tl.add(br).divideBy(2);
+  const a = map.latLngToContainerPoint([n, w]), b = map.latLngToContainerPoint([s, e]);   // the city's box on screen
+  const near = L.point(Math.min(b.x, Math.max(a.x, mid.x)), Math.min(b.y, Math.max(a.y, mid.y)));
+  // Within a quarter of the uncovered map from its middle is close enough, so the city's edges can still be looked at
+  if (Math.abs(near.x - mid.x) <= (br.x - tl.x) / 4 && Math.abs(near.y - mid.y) <= (br.y - tl.y) / 4) return;
+  map.panBy(a.add(b).divideBy(2).subtract(mid), { animate: !reduceMotion });
+});
 function fitForView() {
   if (state.view === "map" && state.selected) return fitTo(areaBounds(state.selected));
   if (state.view === "compare" && state.a && state.b) return fitTo(areaBounds(state.a).extend(areaBounds(state.b)), 15);
