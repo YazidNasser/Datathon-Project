@@ -97,7 +97,7 @@ a { color: var(--sea); }
 #map .leaflet-bar { border: 1px solid var(--line); }
 #map .leaflet-control-attribution { background: var(--surface); color: var(--muted); border-radius: 6px 0 0 0; padding: 2px 16px 2px 8px; }
 #map .leaflet-control-attribution a { color: var(--sea); }
-/* Lift the zoom buttons off the bottom-right corner: the host (Netlify) can float a badge there over the page,
+/* Lift the zoom buttons off the bottom-right corner: the earlier host (Netlify) floated a badge there over the page,
    which covered them. The map's credit line stays at the very bottom. */
 #map .leaflet-bottom.leaflet-right .leaflet-control-zoom { margin-bottom: 60px; }
 /* Compare's and Trends' panels run down the right, so the zoom buttons move beside them
