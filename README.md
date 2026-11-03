@@ -5,7 +5,7 @@
 
 **See where and when crime is reported in Vancouver, in plain language.**
 
-[![Open VanScene](https://img.shields.io/badge/Open_VanScene-live-2ea44f)](https://vanscene.netlify.app) [![Watch the 60-second demo](https://img.shields.io/badge/Demo-60_seconds-1f6feb?logo=youtube&logoColor=white)](https://youtu.be/DbSOYitXOZY) [![Data: VPD GeoDASH open data](https://img.shields.io/badge/Data-VPD_GeoDASH-6e7781)](https://geodash.vpd.ca/opendata/)
+[![Open VanScene](https://img.shields.io/badge/Open_VanScene-live-2ea44f)](https://vanscene.vercel.app) [![Watch the 60-second demo](https://img.shields.io/badge/Demo-60_seconds-1f6feb?logo=youtube&logoColor=white)](https://youtu.be/DbSOYitXOZY) [![Data: VPD GeoDASH open data](https://img.shields.io/badge/Data-VPD_GeoDASH-6e7781)](https://geodash.vpd.ca/opendata/)
 
 <!-- The #gh-*-mode-only endings follow the reader's GitHub theme; <picture> would follow the OS theme instead -->
 <img alt="VanScene: picking years and evening hours, opening an area near Mount Pleasant, then comparing it with Kitsilano" src="docs/vanscene-demo.gif#gh-light-mode-only">
@@ -83,11 +83,10 @@ To build from CSVs you downloaded yourself, unzip them into `data/raw/` and run 
 
 ## How it's built
 
-A static site with no framework and no build step. It's deployed on Netlify from the `web/` folder (see `netlify.toml`).
+A static site with no framework and no build step. It's deployed on Vercel from the `web/` folder.
 
 ```
 ├── README.md
-├── netlify.toml          # publishes web/ on Netlify
 ├── .github/workflows/
 │   ├── ci.yml            # runs the tests on every pull request
 │   └── update-data.yml   # refreshes web/data.json every Sunday, opens an issue if that fails
